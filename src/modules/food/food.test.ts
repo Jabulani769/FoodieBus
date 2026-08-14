@@ -17,6 +17,12 @@ describe('food module', () => {
   });
 
   beforeEach(async () => {
+    await prisma.booking.deleteMany();
+    await prisma.seatInventory.deleteMany();
+    await prisma.trip.deleteMany();
+    await prisma.route.deleteMany();
+    await prisma.bus.deleteMany();
+    await prisma.operatorProfile.deleteMany();
     await prisma.dish.deleteMany();
     await prisma.vendorProfile.deleteMany();
     await prisma.foodCategory.deleteMany();

@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Bus module (module 3)**:
+  - Models: `OperatorProfile` (one per OPERATOR user, auto-created on role assignment), `Bus` (operator-owned, unique plate number, capacity 1–200, type STANDARD/VIP/EXECUTIVE), `Route` (simple `fromCity` → `toCity`, unique pair, base price MWK), `Trip` (operator schedules a bus on a route with departure/arrival and price), `SeatInventory` (one row per seat per trip, auto-generated from bus capacity as `"1".."N"`), `Booking` (passenger reservation tied to a seat).
+  - **Seat locking**: `createBooking` runs inside a transaction with `SELECT ... FOR UPDATE` on the seat row, so two concurrent requests cannot book the same seat (double-booking → `409 SEAT_UNAVAILABLE`). `@@unique([tripId, seatNumber])` is a second DB-level backstop.
+  - Booking lifecycle: `PENDING` (seat `HELD`) → `CONFIRMED` (seat `BOOKED`, flipped by the Payments module via `confirmBooking` on webhook) → `CANCELLED` (seat released back to `AVAILABLE`); `EXPIRED` reserved for failed payments.
+  - Public endpoints: `GET /operators` (paginated), `GET /operators/:id`, `GET /operators/:operatorId/buses`, `GET /bus-routes`, `GET /trips/search` (fromCity/toCity/date filters, shows live seat availability), `GET /trips/:id` (seat map).
+  - Admin endpoints: `POST/PATCH /bus-routes` (admin/super admin); `DELETE /bus-routes/:id` (super admin).
+  - Operator endpoints (own data only): `GET/PATCH /operators/me/profile`, `POST /buses`, `PATCH /buses/:id`, `DELETE /buses/:id` (own; super admin may delete any), `POST /trips`, `PATCH /trips/:id`, `PATCH /trips/:id/status`, `DELETE /trips/:id` (own; super admin may delete any).
+  - Passenger endpoints (any authenticated role): `POST /bookings`, `GET /bookings/me`, `POST /bookings/:id/cancel`.
+  - Ownership guards at the service layer: an operator cannot schedule trips with another operator's bus, update/delete another operator's bus or trip (`403`); a passenger can only cancel their own booking (`403`).
+  - **Auto-create `OperatorProfile`** when a user is assigned the `OPERATOR` role (via `createUser` or `PATCH /users/:id`).
+  - Delete protections: a bus or route with trips → `409`; a trip with bookings → `409`.
+  - All bus mutations are audit-logged.
+  - 38 integration tests (happy paths + RBAC/ownership denials, duplicate plate 409, seat locking, booking lifecycle, cancellation releasing seats).
+  - Prisma schema: `OperatorProfile`, `Bus`, `Route`, `Trip`, `SeatInventory`, `Booking` models + `BusType`/`TripStatus`/`SeatStatus`/`BookingStatus` enums + migration `bus_module`.
+
 - **Food module (module 2)**:
   - Models: `FoodCategory` (platform-wide, admin-managed), `VendorProfile` (one per VENDOR user, auto-created on role assignment), `Dish` (belongs to a vendor + category, price in MWK).
   - Dish availability: `isAvailable` boolean + optional `availableFrom` / `availableTo` time window.
@@ -24,6 +39,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Assumptions / flags
 
+- **Seat naming auto-generated** from bus capacity (`"1".."N"`); no explicit seat-map layouts for now.
+- **Direct routes only** — no intermediate stops for now (a future `TripStop` model can extend this).
+- **Booking hold model**: bookings start `PENDING` and hold the seat until the Payments module confirms (via webhook) or a future expiry job releases `EXPIRED` holds.
 - **Dish images stubbed** as a `imageUrl` string field; S3/R2 upload wiring deferred to a later upload/notifications step.
 - **No soft deletes** for dishes/categories (hard delete), per the agreed plan.
 - `VendorProfile.businessName` defaults to the user's `fullName` on auto-creation; vendors update it via `PATCH /vendors/me/profile`.

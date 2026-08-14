@@ -1,5 +1,10 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { authService, createUser, ensureVendorProfile } from './auth.service.js';
+import {
+  authService,
+  createUser,
+  ensureOperatorProfile,
+  ensureVendorProfile,
+} from './auth.service.js';
 import {
   createUserSchema,
   listUsersSchema,
@@ -307,6 +312,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         data: body,
       });
       await ensureVendorProfile(id, user.fullName, body.role ?? user.role);
+      await ensureOperatorProfile(id, user.fullName, body.role ?? user.role);
       await writeAuditLog({
         actorId: actor.id,
         action: 'user.update',

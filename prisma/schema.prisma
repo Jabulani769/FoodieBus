@@ -28,9 +28,11 @@ model User {
   updatedAt    DateTime @updatedAt
   deletedAt    DateTime?
 
-  refreshTokens RefreshToken[]
-  auditLogs     AuditLog[]
-  vendorProfile VendorProfile?
+  refreshTokens    RefreshToken[]
+  auditLogs        AuditLog[]
+  vendorProfile    VendorProfile?
+  operatorProfile  OperatorProfile?
+  bookings         Booking[]
 
   @@index([role])
   @@index([deletedAt])
@@ -120,4 +122,145 @@ model AuditLog {
   @@index([actorId])
   @@index([entity, entityId])
   @@index([createdAt])
+}
+
+enum BusType {
+  STANDARD
+  VIP
+  EXECUTIVE
+}
+
+enum TripStatus {
+  SCHEDULED
+  BOARDING
+  IN_TRANSIT
+  COMPLETED
+  CANCELLED
+}
+
+enum SeatStatus {
+  AVAILABLE
+  HELD
+  BOOKED
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  EXPIRED
+}
+
+model OperatorProfile {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessName  String
+  description   String?
+  phone         String?
+  logoUrl       String?
+  licenseNumber String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  buses Bus[]
+  trips Trip[]
+
+  @@index([isActive])
+}
+
+model Bus {
+  id          String   @id @default(uuid())
+  operatorId  String
+  operator    OperatorProfile @relation(fields: [operatorId], references: [id], onDelete: Cascade)
+  name        String
+  plateNumber String   @unique
+  capacity    Int
+  busType     BusType  @default(STANDARD)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  trips Trip[]
+
+  @@index([operatorId])
+  @@index([isActive])
+}
+
+model Route {
+  id         String   @id @default(uuid())
+  fromCity   String
+  toCity     String
+  basePrice  Decimal  @db.Decimal(10, 2)
+  distanceKm Int?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  trips Trip[]
+
+  @@unique([fromCity, toCity])
+  @@index([fromCity])
+  @@index([toCity])
+  @@index([isActive])
+}
+
+model Trip {
+  id            String      @id @default(uuid())
+  operatorId    String
+  operator      OperatorProfile @relation(fields: [operatorId], references: [id], onDelete: Cascade)
+  routeId       String
+  route         Route       @relation(fields: [routeId], references: [id])
+  busId         String
+  bus           Bus         @relation(fields: [busId], references: [id])
+  departureTime DateTime
+  arrivalTime   DateTime
+  price         Decimal     @db.Decimal(10, 2)
+  status        TripStatus  @default(SCHEDULED)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  seats    SeatInventory[]
+  bookings Booking[]
+
+  @@index([operatorId])
+  @@index([routeId])
+  @@index([departureTime])
+  @@index([status])
+}
+
+model SeatInventory {
+  id         String     @id @default(uuid())
+  tripId     String
+  trip       Trip       @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  seatNumber String
+  status     SeatStatus @default(AVAILABLE)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  bookings Booking[]
+
+  @@unique([tripId, seatNumber])
+  @@index([tripId, status])
+}
+
+model Booking {
+  id             String        @id @default(uuid())
+  tripId         String
+  trip           Trip          @relation(fields: [tripId], references: [id])
+  seatId         String
+  seat           SeatInventory @relation(fields: [seatId], references: [id])
+  passengerId    String
+  passenger      User          @relation(fields: [passengerId], references: [id])
+  passengerName  String
+  passengerPhone String
+  status         BookingStatus @default(PENDING)
+  totalAmount    Decimal       @db.Decimal(10, 2)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([tripId])
+  @@index([passengerId])
+  @@index([status])
 }
