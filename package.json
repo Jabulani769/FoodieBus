@@ -27,6 +27,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset",
+    "db:test:setup": "tsx scripts/setup-test-db.ts",
     "bootstrap:super-admin": "tsx scripts/bootstrap-super-admin.ts",
     "prepare": "husky"
   },

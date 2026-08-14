@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Test infrastructure**: isolated test database so tests never touch the dev database.
+  - `.env.test` (committed) with test-only env — `DATABASE_URL` points at `foodiebus_test`.
+  - `vitest.setup.ts` loads `.env.test` before any module imports.
+  - `vitest.global-setup.ts` auto-creates the test DB if missing and runs `prisma migrate deploy` before the suite.
+  - `npm run db:test:setup` for manual test-DB setup/migration.
+  - Result: `npm test` wipes only `foodiebus_test`; the dev DB (and the bootstrapped super admin) stay intact.
+
 - **Bus module (module 3)**:
   - Models: `OperatorProfile` (one per OPERATOR user, auto-created on role assignment), `Bus` (operator-owned, unique plate number, capacity 1–200, type STANDARD/VIP/EXECUTIVE), `Route` (simple `fromCity` → `toCity`, unique pair, base price MWK), `Trip` (operator schedules a bus on a route with departure/arrival and price), `SeatInventory` (one row per seat per trip, auto-generated from bus capacity as `"1".."N"`), `Booking` (passenger reservation tied to a seat).
   - **Seat locking**: `createBooking` runs inside a transaction with `SELECT ... FOR UPDATE` on the seat row, so two concurrent requests cannot book the same seat (double-booking → `409 SEAT_UNAVAILABLE`). `@@unique([tripId, seatNumber])` is a second DB-level backstop.
