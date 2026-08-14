@@ -8,6 +8,7 @@ import { errorHandler } from './shared/errors/index.js';
 import { prisma } from './shared/db/prisma.js';
 import { redis } from './shared/redis/index.js';
 import { registerHealthRoutes } from './modules/health/health.routes.js';
+import { registerAuthRoutes } from './modules/auth/auth.routes.js';
 
 export async function buildApp(options: FastifyServerOptions = {}) {
   const app = Fastify({
@@ -32,6 +33,15 @@ export async function buildApp(options: FastifyServerOptions = {}) {
         version: '0.1.0',
       },
       servers: [{ url: '/api/v1' }],
+      components: {
+        securitySchemes: {
+          bearerAuth: {
+            type: 'http',
+            scheme: 'bearer',
+            bearerFormat: 'JWT',
+          },
+        },
+      },
     },
   });
 
@@ -43,6 +53,7 @@ export async function buildApp(options: FastifyServerOptions = {}) {
   app.decorate('redis', redis);
 
   await app.register(registerHealthRoutes, { prefix: '/api/v1' });
+  await app.register(registerAuthRoutes, { prefix: '/api/v1' });
 
   return app;
 }

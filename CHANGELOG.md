@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Auth & RBAC (module 1)**:
+  - JWT access + refresh tokens; refresh tokens stored **hashed (SHA-256)** in DB, **rotated on use** with reuse detection (reuse of a revoked token revokes the token family).
+  - Login by **email or phone**, argon2 password hashing.
+  - RBAC deny-by-default: `authenticate` + `authorize(...roles)` preHandlers; routes declare allowed roles.
+  - Endpoints: `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me`; admin-only `POST /users`, `GET /users` (paginated), `PATCH /users/:id` (role/status — super admin only).
+  - **Admin-only registration**: no public self-registration; super admin creates users and assigns roles. A `SUPER_ADMIN` cannot be demoted by another admin; only the target user themselves (or another super admin) can change their role.
+  - Audit log table; `auth.login` and all `user.create` / `user.update` actions are logged with actor, IP, and timestamp.
+  - Bootstrap script `npm run bootstrap:super-admin` to create the initial super admin from env vars.
+  - 21 integration tests covering happy paths and failure paths (invalid creds, deactivated user, RBAC denials, token rotation, reuse detection, logout).
+  - Prisma schema: `RefreshToken`, `AuditLog` models + migration `auth_refresh_audit`.
+
+### Fixed
+
+- **Refresh token collision**: two refresh tokens issued to the same user within one second produced identical JWTs (same `sub`/`iat`), violating the unique `tokenHash` constraint. Added a unique `jti` (UUID) claim to every refresh token.
+
+### Assumptions / flags
+
+- **Admin-only registration** per your decision; the Admin module (module 6) will add richer user/staff management and platform settings on top.
+- **No email** — password reset and invites deferred; SMS/WhatsApp handled in the Notifications module.
+- `argon2` ships its own TypeScript types; removed the conflicting `@types/argon2`.
+- Initial super admin is created via a bootstrap script, **not** a migration/seed (so credentials never end up in the repo or migration history).
+
 - **Project scaffolding (Phase 0)** — project skeleton for the FoodieBus backend:
   - Trunk-based git workflow on `main` with Conventional Commits enforced via commitlint + husky.
   - TypeScript strict-mode config with Node native subpath imports (`#/*`).
