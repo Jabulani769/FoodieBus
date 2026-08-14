@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Admin module (module 6)**:
+  - **Dashboard stats**: `GET /admin/dashboard` — aggregate user counts by role, booking counts by status, paid revenue, active vendors/operators, pending bookings.
+  - **User management**: `GET /admin/users` (role filter + name/email/phone search), `GET /admin/users/:id` (detail with role-specific profiles and counts), `PATCH /admin/users/:id/status` (toggle active), `DELETE /admin/users/:id` (soft-delete via the previously-unused `deletedAt` column — super admin only, another super admin is protected). Deleted users are rejected at login.
+  - **Vendor/operator approval**: `PATCH /admin/vendors/:id/approve` and `PATCH /admin/operators/:id/approve` toggle the profile `isActive` flag.
+  - **Audit log viewer**: `GET /admin/audit-logs` — the write-only `AuditLog` table now has a paginated query endpoint with `actorId`, `action`, `entity`, and `from`/`to` date filters, including the actor's details.
+  - **Platform settings**: new `PlatformSetting` key-value store (`key` unique, JSON `value`). `GET /admin/settings`, `GET /admin/settings/:key`, `PUT /admin/settings/:key` (upsert) — super admin only. Migration `admin_module`.
+  - All admin routes live under `/api/v1/admin`; dashboard/users/approval/audit require ADMIN or SUPER_ADMIN, soft-delete and settings require SUPER_ADMIN. Mutations are audit-logged.
+  - Existing admin routes in the auth module (`POST/GET /users`, `PATCH /users/:id`, `POST /auth/invite`) are untouched — backward compatible.
+  - 23 integration tests.
+  - Schema: `PlatformSetting` model.
+
 - **Notifications module (module 5)**:
   - **Provider abstraction** (`NotificationProvider` interface) with mock SMS, WhatsApp, and email providers. Real providers are wired later via env toggles: `SMS_PROVIDER` (mock|africastalking), `WHATSAPP_PROVIDER` (mock|meta), `EMAIL_PROVIDER` (mock|resend|smtp) — all default to `mock`, so nothing external is required to run.
   - **BullMQ queue infrastructure** (`src/jobs/`): a `notifications` queue + worker (dispatches to the matching provider, retries with exponential backoff, marks `SENT`/`FAILED`) and a `booking-expiry` queue + repeating worker. Workers boot in-process via `startWorkers()` from `server.ts`.
