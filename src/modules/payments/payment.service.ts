@@ -4,6 +4,7 @@ import { AppError } from '../../shared/errors/AppError.js';
 import { paychangu } from './paychangu.js';
 import { busService } from '../bus/bus.service.js';
 import { generateReceiptPdf } from './receipt.js';
+import { notificationService } from '../notifications/notification.service.js';
 
 type Role = 'SUPER_ADMIN' | 'ADMIN' | 'FINANCIAL' | 'VENDOR' | 'OPERATOR' | 'STUDENT';
 
@@ -95,6 +96,22 @@ export class PaymentService {
         } else {
           throw err;
         }
+      }
+
+      const confirmedBooking = await prisma.booking.findUnique({
+        where: { id: payment.bookingId },
+        include: {
+          trip: { include: { route: { select: { fromCity: true, toCity: true } } } },
+          seat: { select: { seatNumber: true } },
+        },
+      });
+      if (confirmedBooking) {
+        await notificationService.notifyUser(
+          confirmedBooking.passengerId,
+          'Booking confirmed',
+          `Your booking ${confirmedBooking.passengerName} for ${confirmedBooking.trip.route.fromCity} → ${confirmedBooking.trip.route.toCity} (seat ${confirmedBooking.seat.seatNumber}) is confirmed. Payment received via ${result.channel ?? 'PayChangu'}.`,
+          { reference: confirmedBooking.id, referenceType: 'booking' },
+        );
       }
     } else {
       await prisma.payment.update({

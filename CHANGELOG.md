@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Notifications module (module 5)**:
+  - **Provider abstraction** (`NotificationProvider` interface) with mock SMS, WhatsApp, and email providers. Real providers are wired later via env toggles: `SMS_PROVIDER` (mock|africastalking), `WHATSAPP_PROVIDER` (mock|meta), `EMAIL_PROVIDER` (mock|resend|smtp) — all default to `mock`, so nothing external is required to run.
+  - **BullMQ queue infrastructure** (`src/jobs/`): a `notifications` queue + worker (dispatches to the matching provider, retries with exponential backoff, marks `SENT`/`FAILED`) and a `booking-expiry` queue + repeating worker. Workers boot in-process via `startWorkers()` from `server.ts`.
+  - **Models**: `Notification` (channel, status `PENDING/SENT/DELIVERED/FAILED/READ`, reference + referenceType for linking to bookings/payments/OTPs), `OtpCode` (SHA-256-hashed 6-digit code, purpose, expiry, attempts), `NotificationPreference` (per-user SMS/WhatsApp/email toggles, default all on). Migration `notifications_module`.
+  - **OTP / password reset**: `POST /auth/forgot-password` (always 202 — never leaks whether an account exists) and `POST /auth/reset-password` (verify code + set new password). Codes expire after `OTP_TTL_MINUTES` (default 10) and lock after 5 failed attempts.
+  - **User invites**: `POST /auth/invite` (admin/super admin — creates an inactive user and sends a code) and `POST /auth/verify-invite` (activates + sets password).
+  - **Notification API**: `GET /notifications/me` (paginated), `PATCH /notifications/:id/read` (owner only), `GET/PUT /notifications/preferences` (rejects disabling all channels).
+  - **Booking expiry**: `BOOKING_HOLD_MINUTES` (default 15) — the worker transitions stale `PENDING` bookings to `EXPIRED`, releases the seat back to `AVAILABLE`, and notifies the passenger. New `busService.expireBooking()` backs this.
+  - **Hooks into existing flows (best-effort, never block or throw)**: payment confirmation → "Booking confirmed"; booking cancellation → "Booking cancelled"; password reset / invite → OTP via SMS + email.
+  - 20 integration tests (OTP lifecycle, invites, notification CRUD, preferences, booking expiry).
+  - Env: `BOOKING_HOLD_MINUTES`, `OTP_TTL_MINUTES`, provider toggles + credentials, `EMAIL_FROM`.
+
 - **Payments module (module 4)**:
   - PayChangu integration (`PayChanguClient` in `paychangu.ts`): initiate a checkout (`POST /payment`, bearer-token auth) returning a `checkout_url`, and verify a transaction (`GET /verify-payment/{tx_ref}`) used as the source of truth.
   - `Payment` model + `PaymentStatus` (`PENDING/PAID/FAILED/REFUNDED`) and `Currency` (`MWK/USD`) enums + migration `payment_module`. A booking may have **multiple** payment attempts; `txRef` is unique.

@@ -24,6 +24,25 @@ const envSchema = z.object({
   PAYCHANGU_RETURN_URL: z.string().url().optional(),
 
   SENTRY_DSN: z.string().url().optional().or(z.literal('')),
+
+  BOOKING_HOLD_MINUTES: z.coerce.number().int().min(1).default(15),
+  OTP_TTL_MINUTES: z.coerce.number().int().min(1).default(10),
+
+  SMS_PROVIDER: z.enum(['mock', 'africastalking']).default('mock'),
+  SMS_API_KEY: z.string().optional(),
+  SMS_SENDER_ID: z.string().default('FoodieBus'),
+
+  WHATSAPP_PROVIDER: z.enum(['mock', 'meta']).default('mock'),
+  WHATSAPP_API_TOKEN: z.string().optional(),
+  WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+
+  EMAIL_PROVIDER: z.enum(['mock', 'resend', 'smtp']).default('mock'),
+  EMAIL_FROM: z.string().default('noreply@foodiebus.mw'),
+  EMAIL_API_KEY: z.string().optional(),
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().default(587),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

@@ -54,5 +54,36 @@ export const listUsersSchema = z.object({
   }),
 });
 
+export const forgotPasswordSchema = z.object({
+  body: z.object({
+    identifier: z.string().min(3, 'Email or phone is required'),
+  }),
+});
+
+export const resetPasswordSchema = z.object({
+  body: z.object({
+    identifier: z.string().min(3, 'Email or phone is required'),
+    code: z.string().regex(/^\d{6}$/, 'Code must be 6 digits'),
+    newPassword: z.string().min(8, 'Password must be at least 8 characters'),
+  }),
+});
+
+export const inviteUserSchema = z.object({
+  body: z.object({
+    email: z.string().email('Invalid email address'),
+    phone: z.string().regex(/^\+?\d{9,15}$/, 'Invalid phone number'),
+    fullName: z.string().min(1, 'Full name is required'),
+    role: roleSchema,
+  }),
+});
+
+export const verifyInviteSchema = z.object({
+  body: z.object({
+    email: z.string().email('Invalid email address'),
+    code: z.string().regex(/^\d{6}$/, 'Code must be 6 digits'),
+    newPassword: z.string().min(8, 'Password must be at least 8 characters'),
+  }),
+});
+
 export type CreateUserInput = z.infer<typeof createUserSchema>['body'];
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;

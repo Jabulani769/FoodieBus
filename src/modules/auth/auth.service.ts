@@ -3,8 +3,9 @@ import { AppError } from '../../shared/errors/AppError.js';
 import { hashPassword, verifyPassword } from './password.js';
 import { signAccessToken, signRefreshToken } from './jwt.js';
 import { writeAuditLog } from '../../shared/audit/audit.js';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import type { Role } from '../../generated/prisma/enums.js';
+import { notificationService } from '../notifications/notification.service.js';
 
 export interface TokenPair {
   accessToken: string;
@@ -108,6 +109,86 @@ export class AuthService {
     await prisma.refreshToken.updateMany({
       where: { tokenHash, revokedAt: null },
       data: { revokedAt: new Date() },
+    });
+  }
+
+  async requestPasswordReset(identifier: string): Promise<void> {
+    const user = await prisma.user.findFirst({
+      where: { OR: [{ email: identifier.toLowerCase() }, { phone: identifier }] },
+      select: { id: true },
+    });
+    if (!user) return; // never leak whether an account exists
+    await notificationService.sendOtp(user.id, 'password_reset');
+  }
+
+  async resetPassword(identifier: string, code: string, newPassword: string): Promise<void> {
+    const user = await prisma.user.findFirst({
+      where: { OR: [{ email: identifier.toLowerCase() }, { phone: identifier }] },
+    });
+    if (!user) throw AppError.unauthorized('Invalid or expired code');
+
+    await notificationService.verifyOtp(user.id, 'password_reset', code);
+
+    const passwordHash = await hashPassword(newPassword);
+    await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+    await writeAuditLog({
+      actorId: user.id,
+      action: 'auth.password_reset',
+      entity: 'user',
+      entityId: user.id,
+    });
+  }
+
+  async createInvitedUser(input: {
+    email: string;
+    phone: string;
+    fullName: string;
+    role: Role;
+  }): Promise<{ id: string }> {
+    const existing = await prisma.user.findFirst({
+      where: {
+        OR: [{ email: input.email.toLowerCase() }, { phone: input.phone }],
+      },
+      select: { id: true },
+    });
+    if (existing) throw AppError.conflict('A user with this email or phone already exists');
+
+    const tempPassword = randomBytes(18).toString('base64');
+    const passwordHash = await hashPassword(tempPassword);
+    const user = await prisma.user.create({
+      data: {
+        email: input.email.toLowerCase(),
+        phone: input.phone,
+        passwordHash,
+        fullName: input.fullName,
+        role: input.role,
+        isActive: false,
+      },
+      select: { id: true },
+    });
+
+    await ensureVendorProfile(user.id, input.fullName, input.role);
+    await ensureOperatorProfile(user.id, input.fullName, input.role);
+    await notificationService.sendOtp(user.id, 'invite');
+    return user;
+  }
+
+  async acceptInvite(email: string, code: string, newPassword: string): Promise<void> {
+    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    if (!user) throw AppError.unauthorized('Invalid or expired code');
+
+    await notificationService.verifyOtp(user.id, 'invite', code);
+
+    const passwordHash = await hashPassword(newPassword);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash, isActive: true },
+    });
+    await writeAuditLog({
+      actorId: user.id,
+      action: 'auth.invite_accepted',
+      entity: 'user',
+      entityId: user.id,
     });
   }
 

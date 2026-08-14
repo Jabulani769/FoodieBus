@@ -12,6 +12,7 @@ import type {
   UpdateTripInput,
 } from './bus.schema.js';
 import type { BookingStatus, TripStatus } from '../../generated/prisma/enums.js';
+import { notificationService } from '../notifications/notification.service.js';
 
 export interface PaginatedResult<T> {
   items: T[];
@@ -395,7 +396,7 @@ export class BusService {
   }
 
   async cancelBooking(bookingId: string, userId: string): Promise<{ id: string }> {
-    return prisma.$transaction(async (tx) => {
+    const passengerId = await prisma.$transaction(async (tx) => {
       const booking = await tx.booking.findUnique({ where: { id: bookingId } });
       if (!booking) throw AppError.notFound('Booking not found');
       if (booking.passengerId !== userId) {
@@ -414,7 +415,34 @@ export class BusService {
         data: { status: 'AVAILABLE' },
       });
 
-      return { id: bookingId };
+      return booking.passengerId;
+    });
+
+    await notificationService.notifyUser(
+      passengerId,
+      'Booking cancelled',
+      `Your booking ${bookingId} has been cancelled and the seat released.`,
+      { reference: bookingId, referenceType: 'booking' },
+    );
+
+    return { id: bookingId };
+  }
+
+  // Used by the Notifications expiry worker to release a booking whose payment was never completed.
+  async expireBooking(bookingId: string): Promise<void> {
+    await prisma.$transaction(async (tx) => {
+      const booking = await tx.booking.findUnique({ where: { id: bookingId } });
+      if (!booking) return; // already gone — treat as idempotent
+      if (booking.status !== 'PENDING') return; // only expire pending bookings
+
+      await tx.booking.update({
+        where: { id: bookingId },
+        data: { status: 'EXPIRED' as BookingStatus },
+      });
+      await tx.seatInventory.update({
+        where: { id: booking.seatId },
+        data: { status: 'AVAILABLE' },
+      });
     });
   }
 

@@ -1,12 +1,15 @@
 import { env } from './shared/config/index.js';
 import { logger } from './shared/logger/index.js';
 import { buildApp } from './app.js';
+import { startWorkers, stopWorkers } from './jobs/index.js';
 
 async function main(): Promise<void> {
   const app = await buildApp();
+  const workers = startWorkers();
 
   const shutdown = async (signal: string) => {
     logger.info({ signal }, 'shutting down');
+    await stopWorkers(workers);
     await app.close();
     await app.redis.quit();
     await app.prisma.$disconnect();

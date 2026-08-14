@@ -28,11 +28,14 @@ model User {
   updatedAt    DateTime @updatedAt
   deletedAt    DateTime?
 
-  refreshTokens    RefreshToken[]
-  auditLogs        AuditLog[]
-  vendorProfile    VendorProfile?
-  operatorProfile  OperatorProfile?
-  bookings         Booking[]
+  refreshTokens          RefreshToken[]
+  auditLogs              AuditLog[]
+  vendorProfile          VendorProfile?
+  operatorProfile        OperatorProfile?
+  bookings               Booking[]
+  notifications          Notification[]
+  otpCodes               OtpCode[]
+  notificationPreference NotificationPreference?
 
   @@index([role])
   @@index([deletedAt])
@@ -300,4 +303,66 @@ model Payment {
   @@index([bookingId])
   @@index([status])
   @@index([createdAt])
+}
+
+enum NotificationChannel {
+  SMS
+  WHATSAPP
+  EMAIL
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  DELIVERED
+  FAILED
+  READ
+}
+
+model Notification {
+  id            String               @id @default(uuid())
+  userId        String
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel       NotificationChannel
+  subject       String?
+  body          String
+  status        NotificationStatus   @default(PENDING)
+  reference     String?
+  referenceType String?
+  sentAt        DateTime?
+  deliveredAt   DateTime?
+  failureReason String?
+  metadata      Json?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([referenceType, reference])
+  @@index([status])
+}
+
+model OtpCode {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  code        String
+  purpose     String
+  expiresAt   DateTime
+  usedAt      DateTime?
+  attempts    Int      @default(0)
+  maxAttempts Int      @default(5)
+  createdAt   DateTime @default(now())
+
+  @@index([userId, purpose])
+}
+
+model NotificationPreference {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sms       Boolean  @default(true)
+  whatsapp  Boolean  @default(true)
+  email     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

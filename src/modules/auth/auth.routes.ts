@@ -7,11 +7,15 @@ import {
 } from './auth.service.js';
 import {
   createUserSchema,
+  forgotPasswordSchema,
+  inviteUserSchema,
   listUsersSchema,
   loginSchema,
   logoutSchema,
   refreshSchema,
+  resetPasswordSchema,
   updateUserSchema,
+  verifyInviteSchema,
 } from './auth.schema.js';
 import { authenticate, authorize } from '../../shared/middleware/index.js';
 import { AppError } from '../../shared/errors/AppError.js';
@@ -322,6 +326,119 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         ipAddress: request.ip,
       });
       return reply.send({ id });
+    },
+  );
+
+  app.post(
+    '/auth/forgot-password',
+    {
+      schema: {
+        tags: ['auth'],
+        summary: 'Request a password reset code (sent via SMS/email)',
+        body: {
+          type: 'object',
+          properties: { identifier: { type: 'string' } },
+          required: ['identifier'],
+        },
+        response: { 202: { type: 'null' } },
+      },
+    },
+    async (request, reply) => {
+      const { identifier } = forgotPasswordSchema.parse({ body: request.body }).body;
+      await authService.requestPasswordReset(identifier);
+      return reply.code(202).send();
+    },
+  );
+
+  app.post(
+    '/auth/reset-password',
+    {
+      schema: {
+        tags: ['auth'],
+        summary: 'Verify the reset code and set a new password',
+        body: {
+          type: 'object',
+          properties: {
+            identifier: { type: 'string' },
+            code: { type: 'string' },
+            newPassword: { type: 'string', minLength: 8 },
+          },
+          required: ['identifier', 'code', 'newPassword'],
+        },
+        response: { 200: { type: 'object', properties: { ok: { type: 'boolean' } } } },
+      },
+    },
+    async (request, reply) => {
+      const { identifier, code, newPassword } = resetPasswordSchema.parse({
+        body: request.body,
+      }).body;
+      await authService.resetPassword(identifier, code, newPassword);
+      return reply.send({ ok: true });
+    },
+  );
+
+  app.post(
+    '/auth/invite',
+    {
+      preHandler: [authenticate, authorize('SUPER_ADMIN', 'ADMIN')],
+      schema: {
+        tags: ['admin'],
+        summary: 'Invite a new user (sends a verification code)',
+        security: [{ bearerAuth: [] }],
+        body: {
+          type: 'object',
+          properties: {
+            email: { type: 'string' },
+            phone: { type: 'string' },
+            fullName: { type: 'string' },
+            role: {
+              type: 'string',
+              enum: ['SUPER_ADMIN', 'ADMIN', 'FINANCIAL', 'VENDOR', 'OPERATOR', 'STUDENT'],
+            },
+          },
+          required: ['email', 'phone', 'fullName', 'role'],
+        },
+        response: { 201: { type: 'object', properties: { id: { type: 'string' } } } },
+      },
+    },
+    async (request: FastifyRequest, reply) => {
+      const actor = requireUser(request);
+      const data = inviteUserSchema.parse({ body: request.body }).body;
+      const user = await authService.createInvitedUser(data);
+      await writeAuditLog({
+        actorId: actor.id,
+        action: 'user.invite',
+        entity: 'user',
+        entityId: user.id,
+        details: { role: data.role, email: data.email },
+        ipAddress: request.ip,
+      });
+      return reply.code(201).send(user);
+    },
+  );
+
+  app.post(
+    '/auth/verify-invite',
+    {
+      schema: {
+        tags: ['auth'],
+        summary: 'Accept an invite by verifying the code and setting a password',
+        body: {
+          type: 'object',
+          properties: {
+            email: { type: 'string' },
+            code: { type: 'string' },
+            newPassword: { type: 'string', minLength: 8 },
+          },
+          required: ['email', 'code', 'newPassword'],
+        },
+        response: { 200: { type: 'object', properties: { ok: { type: 'boolean' } } } },
+      },
+    },
+    async (request, reply) => {
+      const { email, code, newPassword } = verifyInviteSchema.parse({ body: request.body }).body;
+      await authService.acceptInvite(email, code, newPassword);
+      return reply.send({ ok: true });
     },
   );
 }
