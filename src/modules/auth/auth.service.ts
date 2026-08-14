@@ -157,5 +157,23 @@ export async function createUser(input: {
     },
     select: { id: true },
   });
+
+  await ensureVendorProfile(user.id, input.fullName, input.role);
   return user;
+}
+
+export async function ensureVendorProfile(
+  userId: string,
+  fullName: string,
+  role: Role,
+): Promise<void> {
+  if (role !== 'VENDOR') return;
+  const existing = await prisma.vendorProfile.findUnique({ where: { userId } });
+  if (existing) return;
+  await prisma.vendorProfile.create({
+    data: {
+      userId,
+      businessName: fullName,
+    },
+  });
 }

@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Food module (module 2)**:
+  - Models: `FoodCategory` (platform-wide, admin-managed), `VendorProfile` (one per VENDOR user, auto-created on role assignment), `Dish` (belongs to a vendor + category, price in MWK).
+  - Dish availability: `isAvailable` boolean + optional `availableFrom` / `availableTo` time window.
+  - Public read endpoints: `GET /categories`, `GET /vendors` (paginated), `GET /vendors/:id`, `GET /vendors/:vendorId/dishes` (paginated + filters), `GET /dishes/:id`.
+  - Admin endpoints: `POST /categories`, `PATCH /categories/:id` (admin/super admin); `DELETE /categories/:id` (super admin only).
+  - Vendor endpoints (own data only): `GET/PATCH /vendors/me/profile`, `POST /dishes`, `PATCH /dishes/:id`, `PATCH /dishes/:id/availability`, `DELETE /dishes/:id` (own dish; super admin may delete any).
+  - Ownership guard at the service layer: a vendor cannot mutate another vendor's dishes (`403`).
+  - **Auto-create `VendorProfile`** when a user is assigned the `VENDOR` role (via `createUser` or `PATCH /users/:id`).
+  - Category delete is blocked (`409`) while dishes still reference the category; duplicate category name/slug → `409`.
+  - All food mutations are audit-logged.
+  - 29 integration tests (happy paths + failure paths: RBAC denials, ownership denials, 404s, 409s, availability toggling/windows).
+  - Prisma schema: `FoodCategory`, `VendorProfile`, `Dish` models + migration `food_module`.
+
+### Assumptions / flags
+
+- **Dish images stubbed** as a `imageUrl` string field; S3/R2 upload wiring deferred to a later upload/notifications step.
+- **No soft deletes** for dishes/categories (hard delete), per the agreed plan.
+- `VendorProfile.businessName` defaults to the user's `fullName` on auto-creation; vendors update it via `PATCH /vendors/me/profile`.
+- Integration tests wipe the dev database (they `deleteMany` users) — re-run `npm run bootstrap:super-admin` after `npm test` if you need the dev super admin back.
+
 - **Auth & RBAC (module 1)**:
   - JWT access + refresh tokens; refresh tokens stored **hashed (SHA-256)** in DB, **rotated on use** with reuse detection (reuse of a revoked token revokes the token family).
   - Login by **email or phone**, argon2 password hashing.

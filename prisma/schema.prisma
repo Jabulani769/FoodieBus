@@ -30,9 +30,64 @@ model User {
 
   refreshTokens RefreshToken[]
   auditLogs     AuditLog[]
+  vendorProfile VendorProfile?
 
   @@index([role])
   @@index([deletedAt])
+}
+
+model FoodCategory {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  slug      String   @unique
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  dishes Dish[]
+
+  @@index([isActive])
+}
+
+model VendorProfile {
+  id           String   @id @default(uuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessName String
+  description  String?
+  phone        String?
+  logoUrl      String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  dishes Dish[]
+
+  @@index([isActive])
+}
+
+model Dish {
+  id            String   @id @default(uuid())
+  vendorId      String
+  vendor        VendorProfile @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  categoryId    String
+  category      FoodCategory  @relation(fields: [categoryId], references: [id])
+  name          String
+  description   String?
+  price         Decimal  @db.Decimal(10, 2)
+  imageUrl      String?
+  isAvailable   Boolean  @default(true)
+  availableFrom DateTime?
+  availableTo   DateTime?
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([vendorId])
+  @@index([categoryId])
+  @@index([isAvailable])
+  @@index([vendorId, isAvailable])
 }
 
 model RefreshToken {

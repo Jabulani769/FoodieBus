@@ -9,6 +9,7 @@ import { prisma } from './shared/db/prisma.js';
 import { redis } from './shared/redis/index.js';
 import { registerHealthRoutes } from './modules/health/health.routes.js';
 import { registerAuthRoutes } from './modules/auth/auth.routes.js';
+import { registerFoodRoutes } from './modules/food/food.routes.js';
 
 export async function buildApp(options: FastifyServerOptions = {}) {
   const app = Fastify({
@@ -54,6 +55,7 @@ export async function buildApp(options: FastifyServerOptions = {}) {
 
   await app.register(registerHealthRoutes, { prefix: '/api/v1' });
   await app.register(registerAuthRoutes, { prefix: '/api/v1' });
+  await app.register(registerFoodRoutes, { prefix: '/api/v1' });
 
   return app;
 }
