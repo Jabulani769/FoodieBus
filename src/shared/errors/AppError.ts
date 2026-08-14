@@ -56,6 +56,14 @@ export class AppError extends Error {
     return new AppError('CONFLICT', message);
   }
 
+  static paymentFailed(message = 'Payment failed'): AppError {
+    return new AppError('PAYMENT_FAILED', message);
+  }
+
+  static paymentPending(message = 'Payment is pending'): AppError {
+    return new AppError('PAYMENT_PENDING', message);
+  }
+
   static internal(message = 'Internal server error'): AppError {
     return new AppError('INTERNAL_ERROR', message);
   }

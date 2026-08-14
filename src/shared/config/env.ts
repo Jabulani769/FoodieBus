@@ -20,6 +20,8 @@ const envSchema = z.object({
   PAYCHANGU_PUBLIC_KEY: z.string().optional(),
   PAYCHANGU_WEBHOOK_SECRET: z.string().optional(),
   PAYCHANGU_BASE_URL: z.string().url().default('https://api.paychangu.com'),
+  PAYCHANGU_CALLBACK_URL: z.string().url().optional(),
+  PAYCHANGU_RETURN_URL: z.string().url().optional(),
 
   SENTRY_DSN: z.string().url().optional().or(z.literal('')),
 });

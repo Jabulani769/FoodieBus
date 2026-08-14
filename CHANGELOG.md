@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Payments module (module 4)**:
+  - PayChangu integration (`PayChanguClient` in `paychangu.ts`): initiate a checkout (`POST /payment`, bearer-token auth) returning a `checkout_url`, and verify a transaction (`GET /verify-payment/{tx_ref}`) used as the source of truth.
+  - `Payment` model + `PaymentStatus` (`PENDING/PAID/FAILED/REFUNDED`) and `Currency` (`MWK/USD`) enums + migration `payment_module`. A booking may have **multiple** payment attempts; `txRef` is unique.
+  - `POST /api/v1/payments`: the booking owner initiates a payment for their own `PENDING` booking (others → `403`; a `CONFIRMED`/`CANCELLED` booking → `409`). Returns `checkout_url` + `txRef`; the payment row is `PENDING`.
+  - `POST /api/v1/webhooks/paychangu`: raw-body SHA-256 HMAC signature verification (timing-safe) against `PAYCHANGU_WEBHOOK_SECRET`, then always **re-verifies** via the PayChangu API before confirming. On success the booking flips `PENDING → CONFIRMED` (seat `HELD → BOOKED`) and the payment becomes `PAID`; an amount mismatch marks the payment `FAILED` without touching the booking; duplicate webhooks are idempotent.
+  - `POST /api/v1/payments/:id/verify`: manual re-verification as a fallback if the webhook never fires.
+  - `GET /api/v1/payments/me` (own payments), `GET /api/v1/payments/:id` (owner or staff), `GET /api/v1/payments/:id/receipt` (PDF via `pdfkit`; only when `PAID`).
+  - New `AppError.paymentFailed` (402) / `AppError.paymentPending` (202); env: `PAYCHANGU_SECRET_KEY`, `PAYCHANGU_PUBLIC_KEY`, `PAYCHANGU_WEBHOOK_SECRET`, `PAYCHANGU_BASE_URL`, `PAYCHANGU_CALLBACK_URL`, `PAYCHANGU_RETURN_URL` (all optional, so the app boots without PayChangu configured).
+  - Seat/booking state ownership stays in the Bus module: payments call `busService.confirmBooking`, which treats an already-confirmed booking as idempotent.
+  - 14 integration tests with a mocked PayChangu client (initiation, RBAC, webhook HMAC validation, amount-mismatch failure, idempotency, manual verify, receipts).
+  - `@types/pdfkit` added for the receipt generator.
+
 - **Test infrastructure**: isolated test database so tests never touch the dev database.
   - `.env.test` (committed) with test-only env — `DATABASE_URL` points at `foodiebus_test`.
   - `vitest.setup.ts` loads `.env.test` before any module imports.

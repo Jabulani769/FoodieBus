@@ -18,6 +18,7 @@ describe('auth module', () => {
   });
 
   beforeEach(async () => {
+    await prisma.payment.deleteMany();
     await prisma.booking.deleteMany();
     await prisma.seatInventory.deleteMany();
     await prisma.trip.deleteMany();

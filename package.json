@@ -46,6 +46,7 @@
     "@eslint/js": "^10.0.1",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^26.2.0",
+    "@types/pdfkit": "^0.17.6",
     "@typescript-eslint/eslint-plugin": "^8.67.0",
     "@typescript-eslint/parser": "^8.67.0",
     "@vitest/coverage-v8": "^4.1.10",

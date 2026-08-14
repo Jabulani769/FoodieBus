@@ -260,7 +260,44 @@ model Booking {
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
+  payments Payment[]
+
   @@index([tripId])
   @@index([passengerId])
   @@index([status])
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum Currency {
+  MWK
+  USD
+}
+
+model Payment {
+  id                 String        @id @default(uuid())
+  bookingId          String
+  booking            Booking       @relation(fields: [bookingId], references: [id])
+  txRef              String        @unique
+  amount             Decimal       @db.Decimal(10, 2)
+  currency           Currency      @default(MWK)
+  status             PaymentStatus @default(PENDING)
+  channel            String?
+  provider           String?
+  charges            Decimal?      @db.Decimal(10, 2)
+  checkoutUrl        String?
+  paychanguReference String?
+  meta               Json?
+  paidAt             DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  @@index([bookingId])
+  @@index([status])
+  @@index([createdAt])
 }
