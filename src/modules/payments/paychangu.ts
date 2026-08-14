@@ -26,6 +26,17 @@ export interface VerifyResult {
   provider?: string;
 }
 
+export interface RefundParams {
+  txRef: string;
+  amount: number;
+  reason: string;
+}
+
+export interface RefundResult {
+  refundId: string;
+  status: string;
+}
+
 interface PayChanguErrorBody {
   message?: string;
 }
@@ -109,6 +120,34 @@ export class PayChanguClient {
       channel: d.authorization?.channel,
       provider: d.authorization?.provider,
     };
+  }
+
+  async refund(params: RefundParams): Promise<RefundResult> {
+    const res = await fetch(`${env.PAYCHANGU_BASE_URL}/refund`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.secretKey}`,
+      },
+      body: JSON.stringify({
+        tx_ref: params.txRef,
+        amount: String(params.amount),
+        reason: params.reason,
+      }),
+    });
+
+    const json = (await res.json()) as {
+      status?: string;
+      message?: string;
+      data?: { refund_id?: string; status?: string };
+    };
+
+    if (json.status !== 'success' || !json.data?.refund_id) {
+      throw AppError.paymentFailed(json.message ?? 'PayChangu refund failed');
+    }
+
+    return { refundId: json.data.refund_id, status: json.data.status ?? 'processed' };
   }
 }
 

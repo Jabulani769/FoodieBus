@@ -466,6 +466,24 @@ export class BusService {
     });
   }
 
+  // Used by the Financial module to cancel a CONFIRMED booking when its payment is refunded.
+  async forceCancelBooking(bookingId: string): Promise<void> {
+    await prisma.$transaction(async (tx) => {
+      const booking = await tx.booking.findUnique({ where: { id: bookingId } });
+      if (!booking) return; // already gone — treat as idempotent
+      if (booking.status !== 'CONFIRMED') return; // only cancel confirmed bookings
+
+      await tx.booking.update({
+        where: { id: bookingId },
+        data: { status: 'CANCELLED' as BookingStatus },
+      });
+      await tx.seatInventory.update({
+        where: { id: booking.seatId },
+        data: { status: 'AVAILABLE' },
+      });
+    });
+  }
+
   private isUniqueViolation(err: unknown): boolean {
     return err instanceof Error && 'code' in err && (err as { code?: string }).code === 'P2002';
   }

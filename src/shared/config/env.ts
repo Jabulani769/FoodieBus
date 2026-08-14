@@ -28,6 +28,8 @@ const envSchema = z.object({
   BOOKING_HOLD_MINUTES: z.coerce.number().int().min(1).default(15),
   OTP_TTL_MINUTES: z.coerce.number().int().min(1).default(10),
 
+  COMMISSION_RATE: z.coerce.number().min(0).max(1).default(0.1),
+
   SMS_PROVIDER: z.enum(['mock', 'africastalking']).default('mock'),
   SMS_API_KEY: z.string().optional(),
   SMS_SENDER_ID: z.string().default('FoodieBus'),

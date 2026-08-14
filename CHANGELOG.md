@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Financial module (module 7)**:
+  - **Refund lifecycle**: `POST /financial/refunds` (financial/super admin) requests a refund against a PAID payment (amount ≤ refundable balance, reason required); `GET /financial/refunds` lists with status/date filters; `GET /financial/refunds/:id` shows payment + booking + actors; `PATCH /financial/refunds/:id/approve` and `/reject` (super admin); `POST /financial/refunds/:id/process` calls the PayChangu refund API, then flips the payment to `REFUNDED`, cancels the booking via the new `busService.forceCancelBooking`, releases the seat, and notifies the passenger. Gateway failures leave the refund `FAILED` with the reason.
+  - **Revenue reports**: `GET /financial/reports/revenue` (daily breakdown + totals + refunded amount), `GET /financial/reports/revenue/by-route` and `/by-operator` (grouped sums), and `GET /financial/reports/payments/export` returning a `text/csv` download of all paid payments in a range.
+  - **Settlements**: `POST /financial/settlements/generate` (super admin) computes each operator's gross paid revenue for a `YYYY-MM` period, applies the commission rate (from `PlatformSetting commission_rate`, else `COMMISSION_RATE` env, default 10%), and snapshots gross/commission/net per operator — idempotent per `(operatorId, period)` unique constraint. `GET /financial/settlements` lists with operator/vendor/period/status filters; `PATCH /financial/settlements/:id/pay` marks a settlement paid.
+  - All financial mutations audit-logged (`financial.refund_*`, `financial.settlement_*`). New `Refund` and `Settlement` models and `RefundStatus`/`SettlementStatus` enums (migration `financial_module`). New `paychangu.refund()` client method. Routes live under `/api/v1/financial`; approve/reject/process/generate/pay require SUPER_ADMIN, the rest FINANCIAL or SUPER_ADMIN.
+  - 20 integration tests.
+
 - **Admin module (module 6)**:
   - **Dashboard stats**: `GET /admin/dashboard` — aggregate user counts by role, booking counts by status, paid revenue, active vendors/operators, pending bookings.
   - **User management**: `GET /admin/users` (role filter + name/email/phone search), `GET /admin/users/:id` (detail with role-specific profiles and counts), `PATCH /admin/users/:id/status` (toggle active), `DELETE /admin/users/:id` (soft-delete via the previously-unused `deletedAt` column — super admin only, another super admin is protected). Deleted users are rejected at login.
