@@ -1,0 +1,7 @@
+dist/
+node_modules/
+coverage/
+src/generated/
+*.log
+.env
+.env.*.local
