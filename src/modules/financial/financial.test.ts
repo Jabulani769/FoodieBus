@@ -46,6 +46,8 @@ describe('financial module', () => {
     });
 
     await prisma.rating.deleteMany();
+    await prisma.webhookEvent.deleteMany();
+    await prisma.reconciliationMismatch.deleteMany();
     await prisma.driverTripPayout.deleteMany();
     await prisma.refund.deleteMany();
     await prisma.settlement.deleteMany();
@@ -987,6 +989,106 @@ describe('financial module', () => {
         headers: { authorization: `Bearer ${financial.accessToken}` },
       });
       expect(payForFinancial.statusCode).toBe(403);
+    });
+  });
+
+  describe('Reconciliation mismatches', () => {
+    it('flags a mismatch when the gateway no longer confirms a PAID payment', async () => {
+      const student = await createStudentUser();
+      const { txRef } = await createPaidBookingFor(student);
+      mockedVerify.mockResolvedValue({ status: 'failed', amount: 0, currency: 'MWK' });
+
+      const { runReconciliation } = await import('../../jobs/workers/reconciliation.worker.js');
+      const flagged = await runReconciliation();
+      expect(flagged).toBe(1);
+
+      const payment = await prisma.payment.findUnique({ where: { txRef } });
+      const record = await prisma.reconciliationMismatch.findFirst({
+        where: { paymentId: payment!.id },
+      });
+      expect(record).not.toBeNull();
+      expect(record!.localStatus).toBe('PAID');
+      expect(record!.remoteStatus).toBe('failed');
+      expect(record!.resolved).toBe(false);
+    });
+
+    it('does not flag a mismatch when the gateway confirms the payment', async () => {
+      const student = await createStudentUser();
+      await createPaidBookingFor(student);
+      mockedVerify.mockResolvedValue({ status: 'success', amount: 18000, currency: 'MWK' });
+
+      const { runReconciliation } = await import('../../jobs/workers/reconciliation.worker.js');
+      const flagged = await runReconciliation();
+      expect(flagged).toBe(0);
+      expect(await prisma.reconciliationMismatch.count()).toBe(0);
+    });
+
+    it('does not create duplicate mismatch rows on repeat runs', async () => {
+      const student = await createStudentUser();
+      const { txRef } = await createPaidBookingFor(student);
+      mockedVerify.mockResolvedValue({ status: 'failed', amount: 0, currency: 'MWK' });
+      const { runReconciliation } = await import('../../jobs/workers/reconciliation.worker.js');
+      await runReconciliation();
+      await runReconciliation();
+      const payment = await prisma.payment.findUnique({ where: { txRef } });
+      const count = await prisma.reconciliationMismatch.count({
+        where: { paymentId: payment!.id },
+      });
+      expect(count).toBe(1);
+    });
+
+    it('GET /financial/reconciliation/mismatches lists and filters them', async () => {
+      const student = await createStudentUser();
+      await createPaidBookingFor(student);
+      mockedVerify.mockResolvedValue({ status: 'failed', amount: 0, currency: 'MWK' });
+      const { runReconciliation } = await import('../../jobs/workers/reconciliation.worker.js');
+      await runReconciliation();
+
+      const financial = await createStaffUser('FINANCIAL');
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/v1/financial/reconciliation/mismatches?resolved=false',
+        headers: { authorization: `Bearer ${financial.accessToken}` },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().total).toBe(1);
+      expect(res.json().items[0].remoteStatus).toBe('failed');
+
+      const studentRes = await app.inject({
+        method: 'GET',
+        url: '/api/v1/financial/reconciliation/mismatches',
+        headers: { authorization: `Bearer ${student.accessToken}` },
+      });
+      expect(studentRes.statusCode).toBe(403);
+    });
+
+    it('PATCH /financial/reconciliation/mismatches/:id/resolve marks it resolved (super admin)', async () => {
+      const student = await createStudentUser();
+      const { txRef } = await createPaidBookingFor(student);
+      mockedVerify.mockResolvedValue({ status: 'failed', amount: 0, currency: 'MWK' });
+      const { runReconciliation } = await import('../../jobs/workers/reconciliation.worker.js');
+      await runReconciliation();
+      const payment = await prisma.payment.findUnique({ where: { txRef } });
+      const mismatch = await prisma.reconciliationMismatch.findFirstOrThrow({
+        where: { paymentId: payment!.id },
+      });
+
+      const superAdmin = await createStaffUser('SUPER_ADMIN');
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/api/v1/financial/reconciliation/mismatches/${mismatch.id}/resolve`,
+        headers: { authorization: `Bearer ${superAdmin.accessToken}` },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().resolved).toBe(true);
+      expect(res.json().resolvedAt).not.toBeNull();
+
+      const second = await app.inject({
+        method: 'PATCH',
+        url: `/api/v1/financial/reconciliation/mismatches/${mismatch.id}/resolve`,
+        headers: { authorization: `Bearer ${superAdmin.accessToken}` },
+      });
+      expect(second.statusCode).toBe(409);
     });
   });
 });

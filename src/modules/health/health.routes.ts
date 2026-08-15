@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { env } from '../../shared/config/env.js';
 
 interface HealthResponse {
   status: 'ok' | 'degraded';
@@ -6,6 +7,7 @@ interface HealthResponse {
   checks: {
     database: 'ok' | 'down';
     redis: 'ok' | 'down';
+    paychangu: 'ok' | 'down' | 'not_configured';
   };
   timestamp: string;
 }
@@ -28,8 +30,9 @@ export async function registerHealthRoutes(app: FastifyInstance): Promise<void> 
                 properties: {
                   database: { type: 'string', enum: ['ok', 'down'] },
                   redis: { type: 'string', enum: ['ok', 'down'] },
+                  paychangu: { type: 'string', enum: ['ok', 'down', 'not_configured'] },
                 },
-                required: ['database', 'redis'],
+                required: ['database', 'redis', 'paychangu'],
               },
               timestamp: { type: 'string' },
             },
@@ -45,8 +48,9 @@ export async function registerHealthRoutes(app: FastifyInstance): Promise<void> 
                 properties: {
                   database: { type: 'string', enum: ['ok', 'down'] },
                   redis: { type: 'string', enum: ['ok', 'down'] },
+                  paychangu: { type: 'string', enum: ['ok', 'down', 'not_configured'] },
                 },
-                required: ['database', 'redis'],
+                required: ['database', 'redis', 'paychangu'],
               },
               timestamp: { type: 'string' },
             },
@@ -56,7 +60,11 @@ export async function registerHealthRoutes(app: FastifyInstance): Promise<void> 
       },
     },
     async (_request, reply): Promise<void> => {
-      const checks: HealthResponse['checks'] = { database: 'down', redis: 'down' };
+      const checks: HealthResponse['checks'] = {
+        database: 'down',
+        redis: 'down',
+        paychangu: 'not_configured',
+      };
 
       try {
         await app.prisma.$queryRaw`SELECT 1`;
@@ -72,7 +80,24 @@ export async function registerHealthRoutes(app: FastifyInstance): Promise<void> 
         app.log.error({ err }, 'redis health check failed');
       }
 
-      const status = checks.database === 'ok' && checks.redis === 'ok' ? 'ok' : 'degraded';
+      if (!env.PAYCHANGU_SECRET_KEY) {
+        checks.paychangu = 'not_configured';
+      } else {
+        try {
+          const res = await fetch(`${env.PAYCHANGU_BASE_URL}/ping`);
+          checks.paychangu = res.ok ? 'ok' : 'down';
+        } catch (err) {
+          app.log.error({ err }, 'paychangu health check failed');
+          checks.paychangu = 'down';
+        }
+      }
+
+      const status =
+        checks.database === 'ok' &&
+        checks.redis === 'ok' &&
+        (checks.paychangu === 'ok' || checks.paychangu === 'not_configured')
+          ? 'ok'
+          : 'degraded';
 
       const body: HealthResponse = {
         status,

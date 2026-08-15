@@ -678,6 +678,70 @@ export class FinancialService {
     });
   }
 
+  // ---- Reconciliation mismatches ----
+
+  async listMismatches(
+    page: number,
+    limit: number,
+    filters: { resolved?: 'true' | 'false' } = {},
+  ): Promise<PaginatedResult<unknown>> {
+    const where: Prisma.ReconciliationMismatchWhereInput = {};
+    if (filters.resolved) where.resolved = filters.resolved === 'true';
+
+    const [items, total] = await Promise.all([
+      prisma.reconciliationMismatch.findMany({
+        where,
+        include: {
+          payment: {
+            include: {
+              booking: {
+                include: {
+                  trip: {
+                    include: {
+                      route: { select: { fromCity: true, toCity: true } },
+                      operator: { select: { businessName: true } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.reconciliationMismatch.count({ where }),
+    ]);
+    return { items, page, limit, total };
+  }
+
+  async resolveMismatch(mismatchId: string, actorId: string, actorRole: string): Promise<unknown> {
+    const mismatch = await prisma.reconciliationMismatch.findUnique({
+      where: { id: mismatchId },
+    });
+    if (!mismatch) throw AppError.notFound('Mismatch not found');
+    if (mismatch.resolved) {
+      throw AppError.conflict('Mismatch is already resolved');
+    }
+
+    await prisma.reconciliationMismatch.update({
+      where: { id: mismatchId },
+      data: { resolved: true, resolvedAt: new Date() },
+    });
+    await writeAuditLog({
+      actorId,
+      action: 'reconciliation.mismatch_resolve',
+      entity: 'reconciliation_mismatch',
+      entityId: mismatchId,
+      details: { paymentId: mismatch.paymentId, role: actorRole },
+    });
+    return prisma.reconciliationMismatch.findUnique({
+      where: { id: mismatchId },
+      include: { payment: { include: { booking: true } } },
+    });
+  }
+
   // ---- helpers ----
 
   private refundInclude() {

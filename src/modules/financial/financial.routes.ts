@@ -7,8 +7,10 @@ import {
   driverPayoutIdParamsSchema,
   generateSettlementsSchema,
   listDriverPayoutsSchema,
+  listMismatchesSchema,
   listRefundsSchema,
   listSettlementsSchema,
+  mismatchIdParamsSchema,
   refundIdParamsSchema,
   rejectRefundSchema,
   requestRefundSchema,
@@ -437,6 +439,63 @@ export async function registerFinancialRoutes(app: FastifyInstance): Promise<voi
       const actor = requireUser(request);
       const { id } = driverPayoutIdParamsSchema.parse(request).params;
       return reply.send(await financialService.markDriverPayoutPaid(id, actor.id, actor.role));
+    },
+  );
+
+  app.get(
+    '/financial/reconciliation/mismatches',
+    {
+      preHandler: financialAuth,
+      schema: {
+        tags: ['financial'],
+        summary: 'List payment reconciliation mismatches (financial)',
+        security: [{ bearerAuth: [] }],
+        querystring: {
+          type: 'object',
+          properties: {
+            page: { type: 'integer', minimum: 1, default: 1 },
+            limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+            resolved: { type: 'string', enum: ['true', 'false'] },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              items: { type: 'array' },
+              page: { type: 'integer' },
+              limit: { type: 'integer' },
+              total: { type: 'integer' },
+            },
+          },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply) => {
+      const q = listMismatchesSchema.parse({ querystring: request.query }).querystring;
+      const result = await financialService.listMismatches(q.page, q.limit, {
+        resolved: q.resolved,
+      });
+      return reply.send(result);
+    },
+  );
+
+  app.patch(
+    '/financial/reconciliation/mismatches/:id/resolve',
+    {
+      preHandler: superAdminAuth,
+      schema: {
+        tags: ['financial'],
+        summary: 'Resolve a payment reconciliation mismatch (super admin)',
+        security: [{ bearerAuth: [] }],
+        params: { type: 'object', properties: { id: { type: 'string' } } },
+        response: { 200: { type: 'object', additionalProperties: true } },
+      },
+    },
+    async (request: FastifyRequest, reply) => {
+      const actor = requireUser(request);
+      const { id } = mismatchIdParamsSchema.parse(request).params;
+      return reply.send(await financialService.resolveMismatch(id, actor.id, actor.role));
     },
   );
 }

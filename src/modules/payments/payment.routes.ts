@@ -7,6 +7,7 @@ import { AppError } from '../../shared/errors/AppError.js';
 import { writeAuditLog } from '../../shared/audit/audit.js';
 import { prisma } from '../../shared/db/prisma.js';
 import { env } from '../../shared/config/env.js';
+import type { Prisma } from '../../generated/prisma/client.js';
 
 function requireUser(request: FastifyRequest): NonNullable<typeof request.user> {
   if (!request.user) {
@@ -39,6 +40,10 @@ function extractTxRef(payload: unknown): string | undefined {
     if (typeof d.txRef === 'string') return d.txRef;
   }
   return undefined;
+}
+
+function isUniqueViolation(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && (err as { code?: string }).code === 'P2002';
 }
 
 export async function registerPaymentRoutes(app: FastifyInstance): Promise<void> {
@@ -267,7 +272,34 @@ export async function registerPaymentRoutes(app: FastifyInstance): Promise<void>
         throw AppError.validation('Webhook payload is missing tx_ref');
       }
 
-      await paymentService.verifyAndConfirm(txRef);
+      const payload = request.body as Record<string, unknown>;
+      const event = typeof payload.event === 'string' ? payload.event : 'checkout.payment';
+      const status = typeof payload.status === 'string' ? payload.status : 'unknown';
+
+      // Idempotency: a repeated webhook for the same (txRef, event) is skipped so it
+      // can never double-confirm or double-refund. Also keeps an audit trail of raw
+      // deliveries.
+      let alreadyHandled = false;
+      try {
+        await prisma.webhookEvent.create({
+          data: {
+            txRef,
+            event,
+            status,
+            payload: payload as unknown as Prisma.InputJsonValue,
+          },
+        });
+      } catch (err) {
+        if (isUniqueViolation(err)) {
+          alreadyHandled = true;
+        } else {
+          throw err;
+        }
+      }
+
+      if (!alreadyHandled) {
+        await paymentService.verifyAndConfirm(txRef);
+      }
 
       const payment = await prisma.payment.findUnique({
         where: { txRef },
@@ -278,7 +310,12 @@ export async function registerPaymentRoutes(app: FastifyInstance): Promise<void>
           action: 'payment.webhook',
           entity: 'payment',
           entityId: payment.id,
-          details: { txRef, bookingId: payment.bookingId, status: payment.status },
+          details: {
+            txRef,
+            bookingId: payment.bookingId,
+            status: payment.status,
+            deduplicated: alreadyHandled,
+          },
           ipAddress: request.ip,
         });
       }

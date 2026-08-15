@@ -344,9 +344,39 @@ model Payment {
   updatedAt          DateTime      @updatedAt
 
   refunds Refund[]
+  mismatches ReconciliationMismatch[]
+  webhookEvents WebhookEvent[]
 
   @@index([bookingId])
   @@index([status])
+  @@index([createdAt])
+}
+
+model WebhookEvent {
+  id        String   @id @default(uuid())
+  txRef     String
+  event     String
+  status    String
+  payload   Json
+  createdAt DateTime @default(now())
+
+  payment Payment @relation(fields: [txRef], references: [txRef], onDelete: Cascade)
+
+  @@unique([txRef, event])
+  @@index([txRef])
+}
+
+model ReconciliationMismatch {
+  id           String   @id @default(uuid())
+  paymentId    String
+  payment      Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  localStatus  String
+  remoteStatus String
+  resolved     Boolean  @default(false)
+  resolvedAt   DateTime?
+  createdAt    DateTime @default(now())
+
+  @@index([resolved])
   @@index([createdAt])
 }
 

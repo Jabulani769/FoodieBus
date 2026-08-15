@@ -18,6 +18,10 @@ describe('admin module', () => {
 
   beforeEach(async () => {
     await prisma.rating.deleteMany();
+    await prisma.webhookEvent.deleteMany();
+
+    await prisma.reconciliationMismatch.deleteMany();
+
     await prisma.driverTripPayout.deleteMany();
     await prisma.platformSetting.deleteMany();
     await prisma.notificationPreference.deleteMany();

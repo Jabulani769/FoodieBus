@@ -43,6 +43,10 @@ describe('payments module', () => {
       txRef: `FB-${Math.random().toString(36).slice(2, 10)}`,
     });
     await prisma.rating.deleteMany();
+    await prisma.webhookEvent.deleteMany();
+
+    await prisma.reconciliationMismatch.deleteMany();
+
     await prisma.driverTripPayout.deleteMany();
     await prisma.payment.deleteMany();
     await prisma.foodOrderItem.deleteMany();
@@ -323,6 +327,123 @@ describe('payments module', () => {
       const payments = await prisma.payment.findMany({ where: { txRef } });
       expect(payments.length).toBe(1);
       expect(payments[0]?.status).toBe('PAID');
+    });
+
+    it('records a WebhookEvent on delivery and deduplicates the same (txRef, event)', async () => {
+      mockedVerify.mockResolvedValue({ status: 'success', amount: 18000, currency: 'MWK' });
+      const student = await createStudentUser();
+      const { bookingId } = await createBookingFor(student);
+      const init = await app.inject({
+        method: 'POST',
+        url: '/api/v1/payments',
+        headers: { authorization: `Bearer ${student.accessToken}` },
+        payload: { bookingId },
+      });
+      const txRef = init.json().txRef as string;
+      const payload = { event: 'checkout.payment', tx_ref: txRef, status: 'success' };
+      const headers = { signature: webhookSignature(payload) };
+      const first = await app.inject({
+        method: 'POST',
+        url: '/api/v1/webhooks/paychangu',
+        headers,
+        payload,
+      });
+      expect(first.statusCode).toBe(200);
+      const second = await app.inject({
+        method: 'POST',
+        url: '/api/v1/webhooks/paychangu',
+        headers,
+        payload,
+      });
+      expect(second.statusCode).toBe(200);
+
+      const events = await prisma.webhookEvent.findMany({ where: { txRef } });
+      expect(events.length).toBe(1);
+      expect(events[0]?.event).toBe('checkout.payment');
+      expect(events[0]?.status).toBe('success');
+      // A single confirm ran even though two deliveries arrived.
+      expect(mockedVerify).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('Payment expiry worker', () => {
+    it('expires a stale PENDING payment whose booking is still pending', async () => {
+      const student = await createStudentUser();
+      const { bookingId } = await createBookingFor(student);
+      const init = await app.inject({
+        method: 'POST',
+        url: '/api/v1/payments',
+        headers: { authorization: `Bearer ${student.accessToken}` },
+        payload: { bookingId },
+      });
+      const paymentId = init.json().id as string;
+      await prisma.payment.update({
+        where: { id: paymentId },
+        data: { createdAt: new Date(Date.now() - 60 * 60 * 1000) },
+      });
+
+      const { expireStalePayments } = await import('../../jobs/workers/payment-expiry.worker.js');
+      const expired = await expireStalePayments();
+      expect(expired).toBe(1);
+
+      const payment = await prisma.payment.findUnique({ where: { id: paymentId } });
+      expect(payment?.status).toBe('FAILED');
+      const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
+      expect(booking?.status).toBe('EXPIRED');
+      const seat = await prisma.seatInventory.findFirst({
+        where: {
+          tripId: (await prisma.booking.findUnique({ where: { id: bookingId } }))!.tripId,
+          seatNumber: '1',
+        },
+      });
+      expect(seat?.status).toBe('AVAILABLE');
+    });
+
+    it('fails a stale PENDING payment whose booking is already confirmed', async () => {
+      const student = await createStudentUser();
+      const { bookingId } = await createBookingFor(student);
+      const init = await app.inject({
+        method: 'POST',
+        url: '/api/v1/payments',
+        headers: { authorization: `Bearer ${student.accessToken}` },
+        payload: { bookingId },
+      });
+      const paymentId = init.json().id as string;
+      await prisma.booking.update({
+        where: { id: bookingId },
+        data: { status: 'CONFIRMED' },
+      });
+      await prisma.payment.update({
+        where: { id: paymentId },
+        data: { createdAt: new Date(Date.now() - 60 * 60 * 1000) },
+      });
+
+      const { expireStalePayments } = await import('../../jobs/workers/payment-expiry.worker.js');
+      const expired = await expireStalePayments();
+      expect(expired).toBe(1);
+
+      const payment = await prisma.payment.findUnique({ where: { id: paymentId } });
+      expect(payment?.status).toBe('FAILED');
+      const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
+      expect(booking?.status).toBe('CONFIRMED');
+    });
+
+    it('does not touch a recent PENDING payment', async () => {
+      const student = await createStudentUser();
+      const { bookingId } = await createBookingFor(student);
+      const init = await app.inject({
+        method: 'POST',
+        url: '/api/v1/payments',
+        headers: { authorization: `Bearer ${student.accessToken}` },
+        payload: { bookingId },
+      });
+      const paymentId = init.json().id as string;
+
+      const { expireStalePayments } = await import('../../jobs/workers/payment-expiry.worker.js');
+      const expired = await expireStalePayments();
+      expect(expired).toBe(0);
+      const payment = await prisma.payment.findUnique({ where: { id: paymentId } });
+      expect(payment?.status).toBe('PENDING');
     });
   });
 
