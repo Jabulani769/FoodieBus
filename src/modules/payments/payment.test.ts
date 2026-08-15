@@ -43,6 +43,8 @@ describe('payments module', () => {
       txRef: `FB-${Math.random().toString(36).slice(2, 10)}`,
     });
     await prisma.payment.deleteMany();
+    await prisma.foodOrderItem.deleteMany();
+    await prisma.foodOrder.deleteMany();
     await prisma.booking.deleteMany();
     await prisma.seatInventory.deleteMany();
     await prisma.trip.deleteMany();

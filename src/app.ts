@@ -16,6 +16,7 @@ import { registerNotificationRoutes } from './modules/notifications/notification
 import { registerAdminRoutes } from './modules/admin/admin.routes.js';
 import { registerFinancialRoutes } from './modules/financial/financial.routes.js';
 import { registerAnalyticsRoutes } from './modules/analytics/analytics.routes.js';
+import { registerDeliveryRoutes } from './modules/delivery/delivery.routes.js';
 
 export async function buildApp(options: FastifyServerOptions = {}) {
   const app = Fastify({
@@ -68,6 +69,7 @@ export async function buildApp(options: FastifyServerOptions = {}) {
   await app.register(registerAdminRoutes, { prefix: '/api/v1' });
   await app.register(registerFinancialRoutes, { prefix: '/api/v1' });
   await app.register(registerAnalyticsRoutes, { prefix: '/api/v1' });
+  await app.register(registerDeliveryRoutes, { prefix: '/api/v1' });
 
   return app;
 }

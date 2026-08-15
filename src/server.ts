@@ -2,6 +2,7 @@ import { env } from './shared/config/index.js';
 import { logger } from './shared/logger/index.js';
 import { buildApp } from './app.js';
 import { startWorkers, stopWorkers } from './jobs/index.js';
+import { initRealtime } from './realtime/index.js';
 
 async function main(): Promise<void> {
   const app = await buildApp();
@@ -21,6 +22,7 @@ async function main(): Promise<void> {
 
   try {
     await app.listen({ host: env.HOST, port: env.PORT });
+    initRealtime(app);
   } catch (err) {
     logger.error(err, 'failed to start server');
     process.exit(1);

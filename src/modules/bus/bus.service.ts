@@ -4,15 +4,23 @@ import type { Prisma } from '../../generated/prisma/client.js';
 import type {
   CreateBookingInput,
   CreateBusInput,
+  CreateDriverInput,
   CreateRouteInput,
   CreateTripInput,
   UpdateBusInput,
+  UpdateDriverInput,
   UpdateOperatorProfileInput,
   UpdateRouteInput,
   UpdateTripInput,
 } from './bus.schema.js';
-import type { BookingStatus, TripStatus } from '../../generated/prisma/enums.js';
+import type { BookingStatus, TripStatus, Role } from '../../generated/prisma/enums.js';
 import { notificationService } from '../notifications/notification.service.js';
+import { emitTripStatus } from '../../realtime/index.js';
+import { createUser } from '../auth/auth.service.js';
+
+function statusToPhrase(status: TripStatus): string {
+  return status.toLowerCase().replace('_', ' ');
+}
 
 export interface PaginatedResult<T> {
   items: T[];
@@ -303,17 +311,296 @@ export class BusService {
 
   async updateTripStatus(
     tripId: string,
-    operatorId: string,
+    actor: { id: string; role: Role },
     status: TripStatus,
+  ): Promise<{ id: string }> {
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId },
+      include: {
+        route: { select: { fromCity: true, toCity: true } },
+      },
+    });
+    if (!trip) throw AppError.notFound('Trip not found');
+
+    if (actor.role === 'OPERATOR') {
+      const owned = await prisma.trip.findFirst({
+        where: { id: tripId, operator: { userId: actor.id } },
+      });
+      if (!owned) {
+        throw AppError.forbidden('You can only update the status of your own trips');
+      }
+    } else if (actor.role === 'DRIVER') {
+      const assigned = await prisma.trip.findFirst({
+        where: { id: tripId, driver: { userId: actor.id } },
+      });
+      if (!assigned) {
+        throw AppError.forbidden('You can only update the status of your assigned trips');
+      }
+    } else {
+      throw AppError.forbidden('You can only update the status of your own trips');
+    }
+
+    this.assertTransition(trip.status, status);
+
+    const route = `${trip.route.fromCity} → ${trip.route.toCity}`;
+    const departureTime = trip.departureTime.toISOString();
+
+    await prisma.trip.update({ where: { id: tripId }, data: { status } });
+
+    if (status === 'CANCELLED') {
+      await this.cancelTripBookings(tripId);
+    }
+
+    await this.notifyTripPassengers(
+      tripId,
+      this.statusMessage(status, route, departureTime),
+      tripId,
+    );
+
+    emitTripStatus({ tripId, status, route, departureTime });
+    return { id: tripId };
+  }
+
+  private assertTransition(current: TripStatus, next: TripStatus): void {
+    const allowed: Record<TripStatus, TripStatus[]> = {
+      SCHEDULED: ['BOARDING', 'CANCELLED'],
+      BOARDING: ['IN_TRANSIT', 'CANCELLED'],
+      IN_TRANSIT: ['COMPLETED', 'CANCELLED'],
+      COMPLETED: [],
+      CANCELLED: [],
+    };
+    if (current === next) {
+      throw AppError.conflict(`Trip is already ${statusToPhrase(next)}`);
+    }
+    if (!allowed[current].includes(next)) {
+      throw AppError.conflict(
+        `Invalid trip status transition from ${statusToPhrase(current)} to ${statusToPhrase(next)}`,
+      );
+    }
+  }
+
+  private statusMessage(status: TripStatus, route: string, departureTime: string): string {
+    if (status === 'BOARDING') {
+      return `Your trip ${route} departing ${departureTime} is now boarding at the terminal.`;
+    }
+    if (status === 'IN_TRANSIT') {
+      return `Your trip ${route} departing ${departureTime} has departed.`;
+    }
+    if (status === 'COMPLETED') {
+      return `Your trip ${route} departing ${departureTime} has completed.`;
+    }
+    if (status === 'CANCELLED') {
+      return `Your trip ${route} departing ${departureTime} has been cancelled.`;
+    }
+    return '';
+  }
+
+  private async notifyTripPassengers(
+    tripId: string,
+    message: string,
+    reference: string,
+  ): Promise<void> {
+    const bookings = await prisma.booking.findMany({
+      where: { tripId },
+      select: { passengerId: true },
+    });
+    const ids = [...new Set(bookings.map((b) => b.passengerId))];
+    await Promise.all(
+      ids.map((id) =>
+        notificationService.notifyUser(id, 'Trip update', message, {
+          reference,
+          referenceType: 'trip',
+        }),
+      ),
+    );
+  }
+
+  private async cancelTripBookings(tripId: string): Promise<void> {
+    await prisma.$transaction(async (tx) => {
+      const bookings = await tx.booking.findMany({
+        where: { tripId, status: { in: ['PENDING', 'CONFIRMED'] } },
+        select: { id: true, seatId: true, status: true },
+      });
+      for (const booking of bookings) {
+        await tx.booking.update({
+          where: { id: booking.id },
+          data: { status: 'CANCELLED' },
+        });
+        await tx.seatInventory.update({
+          where: { id: booking.seatId },
+          data: { status: 'AVAILABLE' },
+        });
+      }
+    });
+  }
+
+  // ---- Driver assignment & passenger check-in ----
+
+  async assignDriver(
+    tripId: string,
+    driverId: string,
+    operatorId: string,
   ): Promise<{ id: string }> {
     const trip = await prisma.trip.findUnique({ where: { id: tripId } });
     if (!trip) throw AppError.notFound('Trip not found');
     if (trip.operatorId !== operatorId) {
-      throw AppError.forbidden('You can only update your own trips');
+      throw AppError.forbidden('You can only assign drivers to your own trips');
     }
 
-    await prisma.trip.update({ where: { id: tripId }, data: { status } });
+    const driver = await prisma.driverProfile.findUnique({ where: { id: driverId } });
+    if (!driver) throw AppError.notFound('Driver not found');
+    if (driver.operatorId !== operatorId) {
+      throw AppError.forbidden('You can only assign your own drivers');
+    }
+
+    await prisma.trip.update({ where: { id: tripId }, data: { driverId } });
     return { id: tripId };
+  }
+
+  async checkInPassenger(tripId: string, bookingId: string, actorId: string): Promise<unknown> {
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId },
+      include: { driver: { select: { userId: true } } },
+    });
+    if (!trip) throw AppError.notFound('Trip not found');
+
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { seat: true },
+    });
+    if (!booking) throw AppError.notFound('Booking not found');
+    if (booking.tripId !== tripId) {
+      throw AppError.validation('Booking does not belong to this trip');
+    }
+    if (booking.status !== 'CONFIRMED') {
+      throw AppError.conflict(
+        `Only confirmed bookings can be checked in (current: ${booking.status})`,
+      );
+    }
+
+    const isAssignedDriver = trip.driver?.userId === actorId;
+    const isOperator = await prisma.trip.findFirst({
+      where: { id: tripId, operator: { userId: actorId } },
+    });
+    if (!isAssignedDriver && !isOperator) {
+      throw AppError.forbidden('Only the trip operator or assigned driver can check in passengers');
+    }
+
+    await prisma.booking.update({
+      where: { id: bookingId },
+      data: { checkedInAt: new Date() },
+    });
+    return { id: bookingId, checkedInAt: new Date(), passengerName: booking.passengerName };
+  }
+
+  async getManifest(tripId: string): Promise<unknown> {
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId },
+      include: {
+        route: { select: { fromCity: true, toCity: true } },
+        driver: { select: { id: true, user: { select: { fullName: true } } } },
+      },
+    });
+    if (!trip) throw AppError.notFound('Trip not found');
+
+    const bookings = await prisma.booking.findMany({
+      where: { tripId },
+      select: {
+        id: true,
+        passengerName: true,
+        passengerPhone: true,
+        status: true,
+        checkedInAt: true,
+        seat: { select: { seatNumber: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return {
+      tripId,
+      route: `${trip.route.fromCity} → ${trip.route.toCity}`,
+      driver: trip.driver?.user.fullName ?? null,
+      totalConfirmed: bookings.filter((b) => b.status === 'CONFIRMED').length,
+      checkedIn: bookings.filter((b) => b.checkedInAt !== null).length,
+      passengers: bookings,
+    };
+  }
+
+  // ---- Driver management ----
+
+  async createDriver(
+    data: CreateDriverInput,
+    operatorId: string,
+  ): Promise<{ id: string; userId: string }> {
+    const { id: userId } = await createUser({
+      email: data.email,
+      phone: data.phone,
+      password: data.password,
+      fullName: data.fullName,
+      role: 'DRIVER',
+    });
+
+    const driver = await prisma.driverProfile.create({
+      data: {
+        userId,
+        operatorId,
+        licenseNumber: data.licenseNumber,
+        phone: data.phone,
+      },
+      select: { id: true, userId: true },
+    });
+    return driver;
+  }
+
+  async updateDriver(
+    driverId: string,
+    data: UpdateDriverInput,
+    operatorId: string,
+  ): Promise<unknown> {
+    const driver = await prisma.driverProfile.findUnique({
+      where: { id: driverId },
+      include: { user: true },
+    });
+    if (!driver) throw AppError.notFound('Driver not found');
+    if (driver.operatorId !== operatorId) {
+      throw AppError.forbidden('You can only update your own drivers');
+    }
+
+    await prisma.$transaction([
+      prisma.driverProfile.update({
+        where: { id: driverId },
+        data: {
+          licenseNumber: data.licenseNumber,
+          phone: data.phone,
+        },
+      }),
+      prisma.user.update({
+        where: { id: driver.userId },
+        data: { fullName: data.fullName },
+      }),
+    ]);
+
+    return this.getDriverDetail(driverId);
+  }
+
+  async deactivateDriver(driverId: string, operatorId: string): Promise<void> {
+    const driver = await prisma.driverProfile.findUnique({ where: { id: driverId } });
+    if (!driver) throw AppError.notFound('Driver not found');
+    if (driver.operatorId !== operatorId) {
+      throw AppError.forbidden('You can only deactivate your own drivers');
+    }
+
+    await prisma.driverProfile.update({
+      where: { id: driverId },
+      data: { isActive: false },
+    });
+  }
+
+  private async getDriverDetail(driverId: string): Promise<unknown> {
+    return prisma.driverProfile.findUnique({
+      where: { id: driverId },
+      include: { user: { select: { id: true, fullName: true, email: true, phone: true } } },
+    });
   }
 
   async deleteTrip(tripId: string): Promise<void> {

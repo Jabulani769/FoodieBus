@@ -1,10 +1,13 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { busService } from './bus.service.js';
 import {
+  assignDriverSchema,
   bookingParamsSchema,
   busParamsSchema,
+  checkInSchema,
   createBookingSchema,
   createBusSchema,
+  createDriverSchema,
   createRouteSchema,
   createTripSchema,
   listOperatorBusesSchema,
@@ -14,6 +17,7 @@ import {
   searchTripsSchema,
   tripParamsSchema,
   updateBusSchema,
+  updateDriverSchema,
   updateOperatorProfileSchema,
   updateRouteSchema,
   updateTripSchema,
@@ -672,10 +676,10 @@ export async function registerBusRoutes(app: FastifyInstance): Promise<void> {
   app.patch(
     '/trips/:id/status',
     {
-      preHandler: [authenticate, authorize('OPERATOR')],
+      preHandler: [authenticate, authorize('OPERATOR', 'DRIVER')],
       schema: {
         tags: ['bus'],
-        summary: 'Change an own trip status (operator only)',
+        summary: 'Update own/assigned trip status (operator or assigned driver)',
         security: [{ bearerAuth: [] }],
         params: { type: 'object', properties: { id: { type: 'string' } } },
         body: {
@@ -693,11 +697,10 @@ export async function registerBusRoutes(app: FastifyInstance): Promise<void> {
     },
     async (request: FastifyRequest, reply) => {
       const actor = requireUser(request);
-      const operatorId = await requireOperatorId(actor.id);
       const parsed = updateTripStatusSchema.parse(request);
       const trip = await busService.updateTripStatus(
         parsed.params.id,
-        operatorId,
+        { id: actor.id, role: actor.role },
         parsed.body.status,
       );
       await writeAuditLog({
@@ -870,6 +873,197 @@ export async function registerBusRoutes(app: FastifyInstance): Promise<void> {
         ipAddress: request.ip,
       });
       return reply.send(booking);
+    },
+  );
+
+  // ---- Driver management (OPERATOR) ----
+
+  app.get(
+    '/drivers/me',
+    {
+      preHandler: [authenticate, authorize('OPERATOR')],
+      schema: {
+        tags: ['bus'],
+        summary: 'List own drivers',
+        security: [{ bearerAuth: [] }],
+        response: {
+          200: {
+            type: 'object',
+            properties: { items: { type: 'array' } },
+          },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply) => {
+      const actor = requireUser(request);
+      const operatorId = await requireOperatorId(actor.id);
+      const items = await prisma.driverProfile.findMany({
+        where: { operatorId },
+        include: { user: { select: { id: true, fullName: true, email: true, phone: true } } },
+        orderBy: { createdAt: 'desc' },
+      });
+      return reply.send({ items });
+    },
+  );
+
+  app.post(
+    '/drivers',
+    {
+      preHandler: [authenticate, authorize('OPERATOR')],
+      schema: {
+        tags: ['bus'],
+        summary: 'Register a driver (operator only)',
+        security: [{ bearerAuth: [] }],
+        body: {
+          type: 'object',
+          properties: {
+            fullName: { type: 'string' },
+            phone: { type: 'string' },
+            email: { type: 'string' },
+            password: { type: 'string' },
+            licenseNumber: { type: 'string' },
+          },
+          required: ['fullName', 'phone', 'email', 'password'],
+        },
+        response: { 201: { type: 'object', additionalProperties: true } },
+      },
+    },
+    async (request: FastifyRequest, reply) => {
+      const actor = requireUser(request);
+      const operatorId = await requireOperatorId(actor.id);
+      const parsed = createDriverSchema.parse(request);
+      const driver = await busService.createDriver(parsed.body, operatorId);
+      await writeAuditLog({
+        actorId: actor.id,
+        action: 'driver.create',
+        entity: 'driver',
+        entityId: driver.id,
+        ipAddress: request.ip,
+      });
+      return reply.code(201).send(driver);
+    },
+  );
+
+  app.patch(
+    '/drivers/:id',
+    {
+      preHandler: [authenticate, authorize('OPERATOR')],
+      schema: {
+        tags: ['bus'],
+        summary: 'Update a driver profile (operator only)',
+        security: [{ bearerAuth: [] }],
+        params: { type: 'object', properties: { id: { type: 'string' } } },
+        body: {
+          type: 'object',
+          properties: {
+            fullName: { type: 'string' },
+            licenseNumber: { type: 'string' },
+            phone: { type: 'string' },
+          },
+        },
+        response: { 200: { type: 'object', additionalProperties: true } },
+      },
+    },
+    async (request: FastifyRequest, reply) => {
+      const actor = requireUser(request);
+      const operatorId = await requireOperatorId(actor.id);
+      const parsed = updateDriverSchema.parse(request);
+      const driver = await busService.updateDriver(parsed.params.id, parsed.body, operatorId);
+      return reply.send(driver);
+    },
+  );
+
+  app.delete(
+    '/drivers/:id',
+    {
+      preHandler: [authenticate, authorize('OPERATOR')],
+      schema: {
+        tags: ['bus'],
+        summary: 'Deactivate a driver (operator only)',
+        security: [{ bearerAuth: [] }],
+        params: { type: 'object', properties: { id: { type: 'string' } } },
+        response: { 200: { type: 'object', properties: { id: { type: 'string' } } } },
+      },
+    },
+    async (request: FastifyRequest, reply) => {
+      const actor = requireUser(request);
+      const operatorId = await requireOperatorId(actor.id);
+      const parsed = updateDriverSchema.parse(request);
+      await busService.deactivateDriver(parsed.params.id, operatorId);
+      return reply.send({ id: parsed.params.id });
+    },
+  );
+
+  // ---- Trip fulfillment (OPERATOR / assigned DRIVER) ----
+
+  app.post(
+    '/trips/:id/assign-driver',
+    {
+      preHandler: [authenticate, authorize('OPERATOR')],
+      schema: {
+        tags: ['bus'],
+        summary: 'Assign a driver to an own trip',
+        security: [{ bearerAuth: [] }],
+        params: { type: 'object', properties: { id: { type: 'string' } } },
+        body: {
+          type: 'object',
+          properties: { driverId: { type: 'string' } },
+          required: ['driverId'],
+        },
+        response: { 200: { type: 'object', properties: { id: { type: 'string' } } } },
+      },
+    },
+    async (request: FastifyRequest, reply) => {
+      const actor = requireUser(request);
+      const operatorId = await requireOperatorId(actor.id);
+      const parsed = assignDriverSchema.parse(request);
+      return reply.send(
+        await busService.assignDriver(parsed.params.id, parsed.body.driverId, operatorId),
+      );
+    },
+  );
+
+  app.post(
+    '/trips/:id/check-in',
+    {
+      preHandler: [authenticate, authorize('OPERATOR', 'DRIVER')],
+      schema: {
+        tags: ['bus'],
+        summary: 'Check in a passenger for a trip',
+        security: [{ bearerAuth: [] }],
+        params: { type: 'object', properties: { id: { type: 'string' } } },
+        body: {
+          type: 'object',
+          properties: { bookingId: { type: 'string' } },
+          required: ['bookingId'],
+        },
+        response: { 200: { type: 'object', additionalProperties: true } },
+      },
+    },
+    async (request: FastifyRequest, reply) => {
+      const actor = requireUser(request);
+      const parsed = checkInSchema.parse(request);
+      return reply.send(
+        await busService.checkInPassenger(parsed.params.id, parsed.body.bookingId, actor.id),
+      );
+    },
+  );
+
+  app.get(
+    '/trips/:id/manifest',
+    {
+      preHandler: [authenticate, authorize('OPERATOR', 'DRIVER')],
+      schema: {
+        tags: ['bus'],
+        summary: 'Passenger manifest for a trip',
+        security: [{ bearerAuth: [] }],
+        params: { type: 'object', properties: { id: { type: 'string' } } },
+        response: { 200: { type: 'object', additionalProperties: true } },
+      },
+    },
+    async (request: FastifyRequest, reply) => {
+      const { id } = tripParamsSchema.parse(request).params;
+      return reply.send(await busService.getManifest(id));
     },
   );
 }

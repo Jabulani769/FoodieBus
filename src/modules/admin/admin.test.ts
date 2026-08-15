@@ -22,6 +22,8 @@ describe('admin module', () => {
     await prisma.otpCode.deleteMany();
     await prisma.notification.deleteMany();
     await prisma.payment.deleteMany();
+    await prisma.foodOrderItem.deleteMany();
+    await prisma.foodOrder.deleteMany();
     await prisma.booking.deleteMany();
     await prisma.seatInventory.deleteMany();
     await prisma.trip.deleteMany();

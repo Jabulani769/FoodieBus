@@ -13,6 +13,7 @@ enum Role {
   FINANCIAL
   VENDOR
   OPERATOR
+  DRIVER
   STUDENT
 }
 
@@ -32,12 +33,14 @@ model User {
   auditLogs              AuditLog[]
   vendorProfile          VendorProfile?
   operatorProfile        OperatorProfile?
+  driverProfile          DriverProfile?
   bookings               Booking[]
   notifications          Notification[]
   otpCodes               OtpCode[]
   notificationPreference NotificationPreference?
   refundsRequested       Refund[] @relation("RefundRequestedBy")
   refundsApproved        Refund[] @relation("RefundApprovedBy")
+  foodOrders             FoodOrder[]
 
   @@index([role])
   @@index([deletedAt])
@@ -71,6 +74,7 @@ model VendorProfile {
 
   dishes    Dish[]
   settlements Settlement[]
+  foodOrders    FoodOrder[]
 
   @@index([isActive])
 }
@@ -91,6 +95,8 @@ model Dish {
   sortOrder     Int      @default(0)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+
+  foodOrderItems FoodOrderItem[]
 
   @@index([vendorId])
   @@index([categoryId])
@@ -173,6 +179,7 @@ model OperatorProfile {
   buses Bus[]
   trips Trip[]
   settlements Settlement[]
+  drivers DriverProfile[]
 
   @@index([isActive])
 }
@@ -221,6 +228,8 @@ model Trip {
   route         Route       @relation(fields: [routeId], references: [id])
   busId         String
   bus           Bus         @relation(fields: [busId], references: [id])
+  driverId      String?
+  driver        DriverProfile? @relation(fields: [driverId], references: [id], onDelete: SetNull)
   departureTime DateTime
   arrivalTime   DateTime
   price         Decimal     @db.Decimal(10, 2)
@@ -230,6 +239,7 @@ model Trip {
 
   seats    SeatInventory[]
   bookings Booking[]
+  foodOrders FoodOrder[]
 
   @@index([operatorId])
   @@index([routeId])
@@ -264,10 +274,12 @@ model Booking {
   passengerPhone String
   status         BookingStatus @default(PENDING)
   totalAmount    Decimal       @db.Decimal(10, 2)
+  checkedInAt    DateTime?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
-  payments Payment[]
+  payments  Payment[]
+  foodOrders FoodOrder[]
 
   @@index([tripId])
   @@index([passengerId])
@@ -437,4 +449,69 @@ model Settlement {
   @@unique([vendorId, period])
   @@index([status])
   @@index([period])
+}
+
+enum FoodOrderStatus {
+  PLACED
+  PREPARING
+  READY
+  DELIVERED_TO_BUS
+  CANCELLED
+}
+
+model DriverProfile {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  operatorId    String
+  operator      OperatorProfile @relation(fields: [operatorId], references: [id], onDelete: Cascade)
+  licenseNumber String?
+  phone         String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  trips Trip[]
+
+  @@index([operatorId])
+  @@index([isActive])
+}
+
+model FoodOrder {
+  id          String          @id @default(uuid())
+  bookingId   String
+  booking     Booking         @relation(fields: [bookingId], references: [id])
+  passengerId String
+  passenger   User            @relation(fields: [passengerId], references: [id])
+  tripId      String
+  trip        Trip            @relation(fields: [tripId], references: [id])
+  vendorId    String
+  vendor      VendorProfile   @relation(fields: [vendorId], references: [id])
+  status      FoodOrderStatus @default(PLACED)
+  totalAmount Decimal         @db.Decimal(10, 2)
+  note        String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  items FoodOrderItem[]
+
+  @@index([bookingId])
+  @@index([tripId])
+  @@index([vendorId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model FoodOrderItem {
+  id          String    @id @default(uuid())
+  foodOrderId String
+  foodOrder   FoodOrder @relation(fields: [foodOrderId], references: [id], onDelete: Cascade)
+  dishId      String
+  dish        Dish      @relation(fields: [dishId], references: [id])
+  quantity    Int
+  unitPrice   Decimal   @db.Decimal(10, 2)
+  createdAt   DateTime  @default(now())
+
+  @@index([foodOrderId])
+  @@index([dishId])
 }

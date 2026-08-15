@@ -49,6 +49,8 @@ describe('analytics module', () => {
     await prisma.refund.deleteMany();
     await prisma.settlement.deleteMany();
     await prisma.payment.deleteMany();
+    await prisma.foodOrderItem.deleteMany();
+    await prisma.foodOrder.deleteMany();
     await prisma.booking.deleteMany();
     await prisma.seatInventory.deleteMany();
     await prisma.trip.deleteMany();

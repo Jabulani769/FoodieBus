@@ -18,6 +18,8 @@ describe('bus module', () => {
 
   beforeEach(async () => {
     await prisma.payment.deleteMany();
+    await prisma.foodOrderItem.deleteMany();
+    await prisma.foodOrder.deleteMany();
     await prisma.booking.deleteMany();
     await prisma.seatInventory.deleteMany();
     await prisma.trip.deleteMany();
@@ -484,11 +486,24 @@ describe('bus module', () => {
         method: 'PATCH',
         url: `/api/v1/trips/${trip.id}/status`,
         headers: { authorization: `Bearer ${operator.accessToken}` },
-        payload: { status: 'IN_TRANSIT' },
+        payload: { status: 'BOARDING' },
       });
       expect(res.statusCode).toBe(200);
       const updated = await prisma.trip.findUnique({ where: { id: trip.id } });
-      expect(updated?.status).toBe('IN_TRANSIT');
+      expect(updated?.status).toBe('BOARDING');
+    });
+
+    it('PATCH /trips/:id/status allows a direct transition after boarding', async () => {
+      const operator = await createOperatorUser();
+      const trip = await createTripForOperator(operator.operatorProfile!.id);
+      await prisma.trip.update({ where: { id: trip.id }, data: { status: 'IN_TRANSIT' } });
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/api/v1/trips/${trip.id}/status`,
+        headers: { authorization: `Bearer ${operator.accessToken}` },
+        payload: { status: 'COMPLETED' },
+      });
+      expect(res.statusCode).toBe(200);
     });
 
     it('PATCH /trips/:id/status forbids another operator', async () => {

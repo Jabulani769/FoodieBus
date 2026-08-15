@@ -154,6 +154,48 @@ export const bookingParamsSchema = z.object({
   params: z.object({ id: z.string().uuid('Invalid booking id') }),
 });
 
+// ---- Drivers & trip fulfillment ----
+
+export const createDriverSchema = z.object({
+  body: z.object({
+    fullName: z.string().min(1, 'fullName is required'),
+    phone: phoneSchema,
+    email: z.string().email('Invalid email'),
+    password: z.string().min(8, 'Password must be at least 8 characters'),
+    licenseNumber: z.string().min(1).optional(),
+  }),
+});
+
+export const updateDriverSchema = z.object({
+  params: z.object({ id: z.string().uuid('Invalid driver id') }),
+  body: z
+    .object({
+      fullName: z.string().min(1).optional(),
+      licenseNumber: z.string().min(1).optional(),
+      phone: phoneSchema.optional(),
+    })
+    .refine((b) => Object.keys(b).length > 0, {
+      message: 'At least one field must be provided',
+    }),
+});
+
+export const assignDriverSchema = z.object({
+  params: z.object({ id: z.string().uuid('Invalid trip id') }),
+  body: z.object({
+    driverId: z.string().uuid('Invalid driver id'),
+  }),
+});
+
+export const checkInSchema = z.object({
+  params: z.object({ id: z.string().uuid('Invalid trip id') }),
+  body: z.object({
+    bookingId: z.string().uuid('Invalid booking id'),
+  }),
+});
+
+export type CreateDriverInput = z.infer<typeof createDriverSchema>['body'];
+export type UpdateDriverInput = z.infer<typeof updateDriverSchema>['body'];
+
 export type UpdateOperatorProfileInput = z.infer<typeof updateOperatorProfileSchema>['body'];
 export type CreateBusInput = z.infer<typeof createBusSchema>['body'];
 export type UpdateBusInput = z.infer<typeof updateBusSchema>['body'];
