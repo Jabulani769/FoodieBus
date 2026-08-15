@@ -59,7 +59,7 @@ Required: `DATABASE_URL`, `REDIS_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`
 ### 3. Start infrastructure (Docker)
 
 ```bash
-docker compose up -d
+docker compose up -d postgres redis
 ```
 
 If you're not using Docker, point `DATABASE_URL` / `REDIS_URL` at local instances.
@@ -80,6 +80,17 @@ npm run start        # run compiled build
 ```
 
 The API listens on `http://localhost:8080` and serves Swagger docs at `http://localhost:8080/docs`.
+
+### Run everything with Docker (production build)
+
+```bash
+docker compose up -d --build
+```
+
+This builds the multi-stage `Dockerfile`, runs `migrate` (one-shot `prisma migrate deploy`)
+against Postgres, then starts the `api` service (also runs `migrate deploy` on boot, then
+`node dist/server.js`). Secrets and config are read from `.env` (env-file). A container
+healthcheck polls `GET /api/v1/health`.
 
 ## Scripts
 

@@ -1,6 +1,7 @@
 import type { FastifyError, FastifyReply, FastifyRequest } from 'fastify';
 import { AppError } from './AppError.js';
 import type { ZodError } from 'zod';
+import { captureException } from '../sentry/index.js';
 
 export function errorHandler(
   error: FastifyError,
@@ -32,6 +33,7 @@ export function errorHandler(
   }
 
   request.log.error({ err: error }, 'unhandled error');
+  captureException(error);
   reply.status(500).send({
     error: {
       code: 'INTERNAL_ERROR',

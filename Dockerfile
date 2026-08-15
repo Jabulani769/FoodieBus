@@ -27,7 +27,8 @@ COPY package.json package-lock.json ./
 COPY prisma ./prisma
 COPY prisma.config.ts ./
 
-RUN npm ci --omit=dev && npx prisma generate
+# prisma is a devDependency, so install the CLI explicitly for migrate deploy on boot.
+RUN npm ci --omit=dev && npm install --no-save prisma@7.9.1
 
 COPY --from=builder /app/dist ./dist
 

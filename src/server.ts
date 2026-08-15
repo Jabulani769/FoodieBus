@@ -3,8 +3,10 @@ import { logger } from './shared/logger/index.js';
 import { buildApp } from './app.js';
 import { startWorkers, stopWorkers } from './jobs/index.js';
 import { initRealtime } from './realtime/index.js';
+import { initSentry } from './shared/sentry/index.js';
 
 async function main(): Promise<void> {
+  initSentry();
   const app = await buildApp();
   const workers = startWorkers();
 

@@ -32,6 +32,52 @@ services:
       timeout: 5s
       retries: 10
 
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: foodiebus-migrate
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://foodiebus:foodiebus_dev@postgres:5432/foodiebus?schema=public
+    command: ['sh', '-c', 'npx prisma migrate deploy']
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: foodiebus-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://foodiebus:foodiebus_dev@postgres:5432/foodiebus?schema=public
+      REDIS_URL: redis://redis:6379
+      HOST: 0.0.0.0
+      PORT: 8080
+    ports:
+      - '8080:8080'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'node -e "fetch(\"http://localhost:8080/api/v1/health\").then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
 volumes:
   pg_data:
   redis_data:
