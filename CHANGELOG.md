@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Real notification providers (Phase A)** — replaced the mock-only providers with working real-world integrations behind the existing `NotificationProvider` interface. Mocks remain the default (no external credentials needed for tests/local dev).
+  - **SMS — Africa's Talking** (`SMS_PROVIDER=africastalking`): `POST /version1/messaging` with `apiKey` header + form-encoded `username`/`to`/`message`/`from`; maps per-recipient `status`/`messageId` and throws on failure. Requires `SMS_API_KEY` + new `SMS_API_USERNAME` (application username), optional `SMS_SENDER_ID`.
+  - **WhatsApp — Meta Cloud API** (`WHATSAPP_PROVIDER=meta`): `POST /graph.facebook.com/v18.0/{phone_number_id}/messages` with a Bearer token; strips the leading `+` from phone numbers (Meta expects E.164 without `+`); parses `messages[].id` and surfaces `error.message` on failure. Requires `WHATSAPP_API_TOKEN` + `WHATSAPP_PHONE_NUMBER_ID`.
+  - **Email — Resend** (`EMAIL_PROVIDER=resend`): `POST /api.resend.com/emails` with a Bearer key, `from` = `EMAIL_FROM`, `to` array, subject, text body; returns the Resend `id`. Requires `EMAIL_API_KEY`.
+  - **Email — SMTP** (`EMAIL_PROVIDER=smtp`): sends via `nodemailer` using `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS`; `secure: true` when port is 465; returns the SMTP `messageId`.
+  - All real providers use raw `fetch()` (SMTP uses `nodemailer` — new runtime dependency). Failures throw, the BullMQ worker retries with exponential backoff (3 attempts), then records `FAILED` + `failureReason`.
+  - 14 provider unit tests (mock fallbacks, successful mappings, HTTP/API error mapping, SMTP auth/secure-mode) with stubbed `fetch` and a mocked nodemailer transport — no external APIs are ever called in tests.
+  - Env: added `SMS_API_USERNAME` to `env.ts` and `.env.example`.
+
 - **Delivery module (module 9)** — food ordering, driver management, and trip fulfillment with real-time updates.
   - **Driver management**: `DRIVER` role + new `DriverProfile` model. `POST /drivers` (operator) registers a driver (creates the user with the `DRIVER` role and the profile); `GET /drivers/me` lists own drivers; `PATCH /drivers/:id` updates a driver; `DELETE /drivers/:id` deactivates. Operators can only manage their own drivers.
   - **Trip fulfillment**: `PATCH /trips/:id/status` is now a strict state machine (`SCHEDULED → BOARDING → IN_TRANSIT → COMPLETED`, `CANCELLED` from any non-completed state) — operators update their own trips, assigned drivers their assigned trips; illegal transitions return `409`. Cancelling a trip cancels PENDING/CONFIRMED bookings and releases seats; each status change notifies passengers. `POST /trips/:id/assign-driver` (operator) assigns a driver; `POST /trips/:id/check-in` (operator/driver) records `checkedInAt` on a booking; `GET /trips/:id/manifest` returns the passenger manifest with driver, route, and check-in state.

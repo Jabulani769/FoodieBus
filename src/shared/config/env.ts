@@ -32,6 +32,7 @@ const envSchema = z.object({
 
   SMS_PROVIDER: z.enum(['mock', 'africastalking']).default('mock'),
   SMS_API_KEY: z.string().optional(),
+  SMS_API_USERNAME: z.string().optional(),
   SMS_SENDER_ID: z.string().default('FoodieBus'),
 
   WHATSAPP_PROVIDER: z.enum(['mock', 'meta']).default('mock'),
