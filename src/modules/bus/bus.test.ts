@@ -729,4 +729,164 @@ describe('bus module', () => {
       expect(res.statusCode).toBe(403);
     });
   });
+
+  describe('Live location', () => {
+    // Creates a driver + assigned trip, returns the trip (SCHEDULED by default).
+    async function createDriverTrip(status: 'SCHEDULED' | 'IN_TRANSIT' = 'SCHEDULED') {
+      const operator = await createOperatorUser();
+      const trip = await createTripForOperator(operator.operatorProfile!.id);
+      const driverRes = await app.inject({
+        method: 'POST',
+        url: '/api/v1/drivers',
+        headers: { authorization: `Bearer ${operator.accessToken}` },
+        payload: {
+          fullName: 'Kapiya Mbewe',
+          phone: `+26599${String(Math.floor(1000000 + Math.random() * 9000000))}`,
+          email: `driver-${Math.random().toString(36).slice(2)}@foodiebus.mw`,
+          password: 'password123',
+          licenseNumber: 'DL-2026-001',
+        },
+      });
+      expect(driverRes.statusCode).toBe(201);
+      const driverId = driverRes.json().id as string;
+      const driverUserId = driverRes.json().userId as string;
+      const assign = await app.inject({
+        method: 'POST',
+        url: `/api/v1/trips/${trip.id}/assign-driver`,
+        headers: { authorization: `Bearer ${operator.accessToken}` },
+        payload: { driverId },
+      });
+      expect(assign.statusCode).toBe(200);
+      if (status === 'IN_TRANSIT') {
+        await prisma.trip.update({ where: { id: trip.id }, data: { status: 'IN_TRANSIT' } });
+      }
+      const driver = await prisma.user.findUniqueOrThrow({ where: { id: driverUserId } });
+      const login = await loginAs(driver.email, 'password123');
+      return {
+        operator,
+        tripId: trip.id,
+        driverAccessToken: login.json().accessToken,
+        driverUserId,
+      };
+    }
+
+    it('PATCH /trips/:id/location stores coordinates for an assigned driver in transit', async () => {
+      const { tripId, driverAccessToken } = await createDriverTrip('IN_TRANSIT');
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/api/v1/trips/${tripId}/location`,
+        headers: { authorization: `Bearer ${driverAccessToken}` },
+        payload: { lat: -13.9669, lng: 33.7873 },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().lat).toBe(-13.9669);
+      expect(res.json().lng).toBe(33.7873);
+      expect(res.json().updatedAt).toBeTypeOf('string');
+    });
+
+    it('PATCH /trips/:id/location rejects a driver not assigned to the trip', async () => {
+      const { tripId } = await createDriverTrip('IN_TRANSIT');
+      const other = await createOperatorUser();
+      const otherRoute = await createRoute({ fromCity: 'Blantyre', toCity: 'Zomba' });
+      const otherTrip = await createTripForOperator(other.operatorProfile!.id, {
+        routeId: otherRoute.id,
+      });
+      const otherDriverRes = await app.inject({
+        method: 'POST',
+        url: '/api/v1/drivers',
+        headers: { authorization: `Bearer ${other.accessToken}` },
+        payload: {
+          fullName: 'Other Driver',
+          phone: `+26599${String(Math.floor(1000000 + Math.random() * 9000000))}`,
+          email: `other-driver-${Math.random().toString(36).slice(2)}@foodiebus.mw`,
+          password: 'password123',
+        },
+      });
+      const otherDriverId = otherDriverRes.json().id as string;
+      const otherDriverUserId = otherDriverRes.json().userId as string;
+      await app.inject({
+        method: 'POST',
+        url: `/api/v1/trips/${otherTrip.id}/assign-driver`,
+        headers: { authorization: `Bearer ${other.accessToken}` },
+        payload: { driverId: otherDriverId },
+      });
+      const otherDriverUser = await prisma.user.findUniqueOrThrow({
+        where: { id: otherDriverUserId },
+      });
+      const login = await loginAs(otherDriverUser.email, 'password123');
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/api/v1/trips/${tripId}/location`,
+        headers: { authorization: `Bearer ${login.json().accessToken}` },
+        payload: { lat: -13.9669, lng: 33.7873 },
+      });
+      expect(res.statusCode).toBe(403);
+    });
+
+    it('PATCH /trips/:id/location rejects updates when the trip is not IN_TRANSIT', async () => {
+      const { tripId, driverAccessToken } = await createDriverTrip('SCHEDULED');
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/api/v1/trips/${tripId}/location`,
+        headers: { authorization: `Bearer ${driverAccessToken}` },
+        payload: { lat: -13.9669, lng: 33.7873 },
+      });
+      expect(res.statusCode).toBe(409);
+    });
+
+    it('PATCH /trips/:id/location rejects an operator (DRIVER role only)', async () => {
+      const { operator, tripId } = await createDriverTrip('IN_TRANSIT');
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/api/v1/trips/${tripId}/location`,
+        headers: { authorization: `Bearer ${operator.accessToken}` },
+        payload: { lat: -13.9669, lng: 33.7873 },
+      });
+      expect(res.statusCode).toBe(403);
+    });
+
+    it('PATCH /trips/:id/location rejects out-of-range coordinates', async () => {
+      const { tripId, driverAccessToken } = await createDriverTrip('IN_TRANSIT');
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/api/v1/trips/${tripId}/location`,
+        headers: { authorization: `Bearer ${driverAccessToken}` },
+        payload: { lat: 95, lng: 33.7873 },
+      });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('GET /trips/:id/location returns the latest stored coordinates', async () => {
+      const { tripId, driverAccessToken } = await createDriverTrip('IN_TRANSIT');
+      await app.inject({
+        method: 'PATCH',
+        url: `/api/v1/trips/${tripId}/location`,
+        headers: { authorization: `Bearer ${driverAccessToken}` },
+        payload: { lat: -13.9669, lng: 33.7873 },
+      });
+      const student = await createStudentUser();
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/v1/trips/${tripId}/location`,
+        headers: { authorization: `Bearer ${student.accessToken}` },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().lat).toBe(-13.9669);
+      expect(res.json().lng).toBe(33.7873);
+      expect(res.json().stale).toBe(false);
+    });
+
+    it('GET /trips/:id/location reports stale when no location was recorded', async () => {
+      const { tripId } = await createDriverTrip('IN_TRANSIT');
+      const student = await createStudentUser();
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/v1/trips/${tripId}/location`,
+        headers: { authorization: `Bearer ${student.accessToken}` },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().stale).toBe(true);
+      expect(res.json().lat).toBeUndefined();
+    });
+  });
 });

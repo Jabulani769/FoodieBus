@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Live bus tracking (Phase F)** — assigned drivers push the bus's live coordinates over the existing Socket.io infra, and passengers/operators read the latest position.
+  - **Data model**: coordinates live in **Redis** (`trip:location:{tripId}` hash with `lat`/`lng`/`updatedAt` and a 24h TTL) rather than a Prisma table — location is high-frequency, ephemeral state (avoids write amplification). No migration.
+  - **Write**: `PATCH /api/v1/trips/:id/location` (DRIVER only) accepts `{ lat, lng }` validated to `lat ∈ [-90, 90]`, `lng ∈ [-180, 180]`. The service enforces that the actor is the driver assigned to the trip (403) and that the trip is `IN_TRANSIT` (409), stores the coords in Redis, and emits a `trip:location` Socket.io event to the trip room via the new `emitTripLocation` helper (mirrors `emitTripStatus`).
+  - **Read**: `GET /api/v1/trips/:id/location` (any authenticated user) returns `{ tripId, lat, lng, updatedAt, stale }` as a fallback for clients already receiving the live push; `stale: true` when no location is recorded or the last update is older than 15 minutes.
+  - 8 integration tests (assigned driver stores coords, non-assigned driver 403, non-`IN_TRANSIT` 409, operator 403, out-of-range coords 400, GET returns latest coords with `stale: false`, GET reports `stale: true` when absent). Socket emissions are no-ops in tests (G8), so assertions read the stored Redis value.
+
 - **Food-order settlement & vendor payouts (Phase E)** — settlements now cover vendors, not just operators, and revenue reports count delivered food orders.
   - **Schema**: no migration needed — the `Settlement` model already carried `vendorId` (optional) with a unique `(vendorId, period)` constraint and its `VendorProfile` relation; the generation logic was the only gap.
   - **Settlement generation**: `POST /financial/settlements/generate` now also iterates active vendors and creates a settlement from `totalAmount` of `DELIVERED_TO_BUS` food orders whose `updatedAt` falls in the period (only delivered orders count as recognized revenue — `PLACED`/`PREPARING`/`READY`/`CANCELLED` are excluded). Commission uses the same `commission_rate` `PlatformSetting`, and idempotency is preserved per `(vendorId, period)`.

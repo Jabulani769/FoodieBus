@@ -15,11 +15,12 @@ import type {
 } from './bus.schema.js';
 import type { BookingStatus, TripStatus, Role } from '../../generated/prisma/enums.js';
 import { notificationService } from '../notifications/notification.service.js';
-import { emitTripStatus } from '../../realtime/index.js';
+import { emitTripStatus, emitTripLocation } from '../../realtime/index.js';
 import { createUser } from '../auth/auth.service.js';
 import { ratingService } from '../ratings/rating.service.js';
 import { writeAuditLog } from '../../shared/audit/audit.js';
 import { env } from '../../shared/config/env.js';
+import { redis } from '../../shared/redis/index.js';
 
 function statusToPhrase(status: TripStatus): string {
   return status.toLowerCase().replace('_', ' ');
@@ -533,6 +534,64 @@ export class BusService {
       checkedIn: bookings.filter((b) => b.checkedInAt !== null).length,
       passengers: bookings,
     };
+  }
+
+  // ---- Live location ----
+
+  private static readonly LOCATION_TTL_SECONDS = 60 * 60 * 24;
+  private static readonly LOCATION_STALE_MS = 15 * 60 * 1000;
+
+  private locationKey(tripId: string): string {
+    return `trip:location:${tripId}`;
+  }
+
+  async updateTripLocation(
+    tripId: string,
+    lat: number,
+    lng: number,
+    driverUserId: string,
+  ): Promise<{ tripId: string; lat: number; lng: number; updatedAt: string }> {
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId },
+      include: { driver: { select: { userId: true } } },
+    });
+    if (!trip) throw AppError.notFound('Trip not found');
+    if (trip.driver?.userId !== driverUserId) {
+      throw AppError.forbidden('You can only update the location of your assigned trips');
+    }
+    if (trip.status !== 'IN_TRANSIT') {
+      throw AppError.conflict(
+        `Location updates are only allowed while the trip is in transit (current: ${statusToPhrase(trip.status)})`,
+      );
+    }
+
+    const updatedAt = new Date().toISOString();
+    await redis.hset(this.locationKey(tripId), {
+      lat: String(lat),
+      lng: String(lng),
+      updatedAt,
+    });
+    await redis.expire(this.locationKey(tripId), BusService.LOCATION_TTL_SECONDS);
+
+    emitTripLocation({ tripId, lat, lng, updatedAt });
+    return { tripId, lat, lng, updatedAt };
+  }
+
+  async getTripLocation(
+    tripId: string,
+  ): Promise<{ tripId: string; lat?: number; lng?: number; updatedAt?: string; stale: boolean }> {
+    const data = await redis.hgetall(this.locationKey(tripId));
+    if (!data || Object.keys(data).length === 0) {
+      return { tripId, stale: true };
+    }
+    const lat = Number(data.lat);
+    const lng = Number(data.lng);
+    const updatedAt = data.updatedAt;
+    if (Number.isNaN(lat) || Number.isNaN(lng) || !updatedAt) {
+      return { tripId, stale: true };
+    }
+    const stale = Date.now() - new Date(updatedAt).getTime() > BusService.LOCATION_STALE_MS;
+    return { tripId, lat, lng, updatedAt, stale };
   }
 
   // ---- Driver management ----

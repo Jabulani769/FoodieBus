@@ -21,6 +21,7 @@ import {
   updateOperatorProfileSchema,
   updateRouteSchema,
   updateTripSchema,
+  updateTripLocationSchema,
   updateTripStatusSchema,
 } from './bus.schema.js';
 import { authenticate, authorize } from '../../shared/middleware/index.js';
@@ -1068,6 +1069,79 @@ export async function registerBusRoutes(app: FastifyInstance): Promise<void> {
     async (request: FastifyRequest, reply) => {
       const { id } = tripParamsSchema.parse(request).params;
       return reply.send(await busService.getManifest(id));
+    },
+  );
+
+  app.patch(
+    '/trips/:id/location',
+    {
+      preHandler: [authenticate, authorize('DRIVER')],
+      schema: {
+        tags: ['bus'],
+        summary: 'Update live bus location (assigned driver, while in transit)',
+        security: [{ bearerAuth: [] }],
+        params: { type: 'object', properties: { id: { type: 'string' } } },
+        body: {
+          type: 'object',
+          properties: {
+            lat: { type: 'number', minimum: -90, maximum: 90 },
+            lng: { type: 'number', minimum: -180, maximum: 180 },
+          },
+          required: ['lat', 'lng'],
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              tripId: { type: 'string' },
+              lat: { type: 'number' },
+              lng: { type: 'number' },
+              updatedAt: { type: 'string' },
+            },
+          },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply) => {
+      const actor = requireUser(request);
+      const parsed = updateTripLocationSchema.parse(request);
+      return reply.send(
+        await busService.updateTripLocation(
+          parsed.params.id,
+          parsed.body.lat,
+          parsed.body.lng,
+          actor.id,
+        ),
+      );
+    },
+  );
+
+  app.get(
+    '/trips/:id/location',
+    {
+      preHandler: [authenticate],
+      schema: {
+        tags: ['bus'],
+        summary: 'Get the latest live location for a trip',
+        security: [{ bearerAuth: [] }],
+        params: { type: 'object', properties: { id: { type: 'string' } } },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              tripId: { type: 'string' },
+              lat: { type: 'number' },
+              lng: { type: 'number' },
+              updatedAt: { type: 'string' },
+              stale: { type: 'boolean' },
+            },
+          },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply) => {
+      const { id } = tripParamsSchema.parse(request).params;
+      return reply.send(await busService.getTripLocation(id));
     },
   );
 }

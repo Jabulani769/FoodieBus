@@ -18,6 +18,13 @@ export interface FoodOrderStatusEvent {
   vendorName: string;
 }
 
+export interface TripLocationEvent {
+  tripId: string;
+  lat: number;
+  lng: number;
+  updatedAt: string;
+}
+
 export function initRealtime(app: FastifyInstance): Server {
   if (io) return io;
 
@@ -79,4 +86,8 @@ export function emitTripStatus(event: TripStatusEvent): void {
 
 export function emitFoodOrderStatus(passengerId: string, event: FoodOrderStatusEvent): void {
   io?.to(`user:${passengerId}`).emit('food:order-status', event);
+}
+
+export function emitTripLocation(event: TripLocationEvent): void {
+  io?.to(`trip:${event.tripId}`).emit('trip:location', event);
 }

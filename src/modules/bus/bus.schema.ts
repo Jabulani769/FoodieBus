@@ -139,6 +139,20 @@ export const tripParamsSchema = z.object({
   params: z.object({ id: z.string().uuid('Invalid trip id') }),
 });
 
+export const updateTripLocationSchema = z.object({
+  params: z.object({ id: z.string().uuid('Invalid trip id') }),
+  body: z.object({
+    lat: z
+      .number()
+      .min(-90, 'lat must be between -90 and 90')
+      .max(90, 'lat must be between -90 and 90'),
+    lng: z
+      .number()
+      .min(-180, 'lng must be between -180 and 180')
+      .max(180, 'lng must be between -180 and 180'),
+  }),
+});
+
 // ---- Bookings ----
 
 export const createBookingSchema = z.object({
