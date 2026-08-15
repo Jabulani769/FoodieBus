@@ -4,7 +4,9 @@ import { authenticate, authorize } from '../../shared/middleware/index.js';
 import { AppError } from '../../shared/errors/AppError.js';
 import {
   dateRangeQuerySchema,
+  driverPayoutIdParamsSchema,
   generateSettlementsSchema,
+  listDriverPayoutsSchema,
   listRefundsSchema,
   listSettlementsSchema,
   refundIdParamsSchema,
@@ -376,6 +378,65 @@ export async function registerFinancialRoutes(app: FastifyInstance): Promise<voi
       const actor = requireUser(request);
       const { id } = settlementIdParamsSchema.parse(request).params;
       return reply.send(await financialService.markSettlementPaid(id, actor.id, actor.role));
+    },
+  );
+
+  app.get(
+    '/financial/driver-payouts',
+    {
+      preHandler: financialAuth,
+      schema: {
+        tags: ['financial'],
+        summary: 'List driver payouts (financial)',
+        security: [{ bearerAuth: [] }],
+        querystring: {
+          type: 'object',
+          properties: {
+            page: { type: 'integer', minimum: 1, default: 1 },
+            limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+            driverId: { type: 'string' },
+            status: { type: 'string' },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              items: { type: 'array' },
+              page: { type: 'integer' },
+              limit: { type: 'integer' },
+              total: { type: 'integer' },
+            },
+          },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply) => {
+      const q = listDriverPayoutsSchema.parse({ querystring: request.query }).querystring;
+      const result = await financialService.listDriverPayouts(q.page, q.limit, {
+        driverId: q.driverId,
+        status: q.status,
+      });
+      return reply.send(result);
+    },
+  );
+
+  app.patch(
+    '/financial/driver-payouts/:id/pay',
+    {
+      preHandler: superAdminAuth,
+      schema: {
+        tags: ['financial'],
+        summary: 'Mark a driver payout as paid (super admin)',
+        security: [{ bearerAuth: [] }],
+        params: { type: 'object', properties: { id: { type: 'string' } } },
+        response: { 200: { type: 'object', additionalProperties: true } },
+      },
+    },
+    async (request: FastifyRequest, reply) => {
+      const actor = requireUser(request);
+      const { id } = driverPayoutIdParamsSchema.parse(request).params;
+      return reply.send(await financialService.markDriverPayoutPaid(id, actor.id, actor.role));
     },
   );
 }

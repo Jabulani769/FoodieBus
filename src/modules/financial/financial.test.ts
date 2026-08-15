@@ -45,6 +45,7 @@ describe('financial module', () => {
     });
 
     await prisma.rating.deleteMany();
+    await prisma.driverTripPayout.deleteMany();
     await prisma.refund.deleteMany();
     await prisma.settlement.deleteMany();
     await prisma.payment.deleteMany();
@@ -172,6 +173,70 @@ describe('financial module', () => {
     expect(verify.statusCode).toBe(200);
     expect(verify.json().status).toBe('PAID');
     return { bookingId, paymentId, txRef: init.json().txRef as string };
+  }
+
+  async function createCompletedTrip(opts: { withDriver?: boolean } = {}) {
+    const operator = await createOperatorUser();
+    const route = await prisma.route.create({
+      data: { fromCity: 'Lilongwe', toCity: 'Blantyre', basePrice: 12000, distanceKm: 300 },
+    });
+    const bus = await prisma.bus.create({
+      data: {
+        operatorId: operator.operatorProfile!.id,
+        name: 'Coach',
+        plateNumber: `BC-${Math.random().toString(36).slice(2, 8)}`,
+        capacity: 3,
+      },
+    });
+    const tripRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/trips',
+      headers: { authorization: `Bearer ${operator.accessToken}` },
+      payload: {
+        routeId: route.id,
+        busId: bus.id,
+        departureTime: '2026-08-20T08:00:00+02:00',
+        arrivalTime: '2026-08-20T12:30:00+02:00',
+        price: 15000,
+      },
+    });
+    expect(tripRes.statusCode).toBe(201);
+    const tripId = tripRes.json().id as string;
+
+    let driverId: string | null = null;
+    if (opts.withDriver) {
+      const driverRes = await app.inject({
+        method: 'POST',
+        url: '/api/v1/drivers',
+        headers: { authorization: `Bearer ${operator.accessToken}` },
+        payload: {
+          fullName: 'Kapiya Mbewe',
+          phone: `+26599${String(Math.floor(1000000 + Math.random() * 9000000))}`,
+          email: `driver-${Math.random().toString(36).slice(2)}@foodiebus.mw`,
+          password: 'password123',
+          licenseNumber: 'DL-2026-001',
+        },
+      });
+      expect(driverRes.statusCode).toBe(201);
+      driverId = driverRes.json().id;
+      const assign = await app.inject({
+        method: 'POST',
+        url: `/api/v1/trips/${tripId}/assign-driver`,
+        headers: { authorization: `Bearer ${operator.accessToken}` },
+        payload: { driverId },
+      });
+      expect(assign.statusCode).toBe(200);
+    }
+
+    await prisma.trip.update({ where: { id: tripId }, data: { status: 'IN_TRANSIT' } });
+    const complete = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/trips/${tripId}/status`,
+      headers: { authorization: `Bearer ${operator.accessToken}` },
+      payload: { status: 'COMPLETED' },
+    });
+    expect(complete.statusCode).toBe(200);
+    return { operator, tripId, driverId };
   }
 
   describe('Refund lifecycle', () => {
@@ -545,6 +610,154 @@ describe('financial module', () => {
         payload: { period: '2026-08' },
       });
       expect(res.statusCode).toBe(403);
+    });
+  });
+
+  describe('Driver payouts', () => {
+    async function setDriverFee(fee: number) {
+      await prisma.platformSetting.upsert({
+        where: { key: 'driver_trip_fee' },
+        update: { value: fee },
+        create: { key: 'driver_trip_fee', value: fee },
+      });
+    }
+
+    it('creates a PENDING payout when a trip with an assigned driver completes', async () => {
+      await setDriverFee(2000);
+      const { tripId, driverId } = await createCompletedTrip({ withDriver: true });
+      const payout = await prisma.driverTripPayout.findUnique({ where: { tripId } });
+      expect(payout).not.toBeNull();
+      expect(payout!.driverId).toBe(driverId);
+      expect(payout!.status).toBe('PENDING');
+      expect(Number(payout!.amount)).toBe(2000);
+    });
+
+    it('does not create a payout when the trip has no assigned driver', async () => {
+      await setDriverFee(2000);
+      const { tripId } = await createCompletedTrip({ withDriver: false });
+      expect(await prisma.driverTripPayout.count({ where: { tripId } })).toBe(0);
+    });
+
+    it('does not create a payout when a trip is cancelled', async () => {
+      await setDriverFee(2000);
+      const operator = await createOperatorUser();
+      const route = await prisma.route.create({
+        data: { fromCity: 'Lilongwe', toCity: 'Zomba', basePrice: 10000, distanceKm: 250 },
+      });
+      const bus = await prisma.bus.create({
+        data: {
+          operatorId: operator.operatorProfile!.id,
+          name: 'Coach',
+          plateNumber: `BC-${Math.random().toString(36).slice(2, 8)}`,
+          capacity: 3,
+        },
+      });
+      const tripRes = await app.inject({
+        method: 'POST',
+        url: '/api/v1/trips',
+        headers: { authorization: `Bearer ${operator.accessToken}` },
+        payload: {
+          routeId: route.id,
+          busId: bus.id,
+          departureTime: '2026-08-20T08:00:00+02:00',
+          arrivalTime: '2026-08-20T12:30:00+02:00',
+          price: 15000,
+        },
+      });
+      const tripId = tripRes.json().id as string;
+      const cancel = await app.inject({
+        method: 'PATCH',
+        url: `/api/v1/trips/${tripId}/status`,
+        headers: { authorization: `Bearer ${operator.accessToken}` },
+        payload: { status: 'CANCELLED' },
+      });
+      expect(cancel.statusCode).toBe(200);
+      expect(await prisma.driverTripPayout.count({ where: { tripId } })).toBe(0);
+    });
+
+    it('creates only one payout per trip (idempotent on retry)', async () => {
+      await setDriverFee(2000);
+      const { operator, tripId } = await createCompletedTrip({ withDriver: true });
+      const complete = await app.inject({
+        method: 'PATCH',
+        url: `/api/v1/trips/${tripId}/status`,
+        headers: { authorization: `Bearer ${operator.accessToken}` },
+        payload: { status: 'COMPLETED' },
+      });
+      expect(complete.statusCode).toBe(409);
+      const count = await prisma.driverTripPayout.count({ where: { tripId } });
+      expect(count).toBe(1);
+    });
+
+    it('GET /financial/driver-payouts lists payouts with filters', async () => {
+      await setDriverFee(2000);
+      const staff = await createStaffUser('SUPER_ADMIN');
+      const { driverId } = await createCompletedTrip({ withDriver: true });
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/v1/financial/driver-payouts?driverId=${driverId}&status=PENDING`,
+        headers: { authorization: `Bearer ${staff.accessToken}` },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().total).toBe(1);
+      expect(res.json().items[0].amount.toString()).toBe('2000');
+    });
+
+    it('PATCH /financial/driver-payouts/:id/pay marks a payout paid (super admin)', async () => {
+      await setDriverFee(2000);
+      const superAdmin = await createStaffUser('SUPER_ADMIN');
+      const { tripId } = await createCompletedTrip({ withDriver: true });
+      const payout = await prisma.driverTripPayout.findUniqueOrThrow({ where: { tripId } });
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/api/v1/financial/driver-payouts/${payout.id}/pay`,
+        headers: { authorization: `Bearer ${superAdmin.accessToken}` },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().status).toBe('PAID');
+      expect(res.json().paidAt).not.toBeNull();
+    });
+
+    it('PATCH /financial/driver-payouts/:id/pay rejects an already-paid payout', async () => {
+      await setDriverFee(2000);
+      const superAdmin = await createStaffUser('SUPER_ADMIN');
+      const { tripId } = await createCompletedTrip({ withDriver: true });
+      const payout = await prisma.driverTripPayout.findUniqueOrThrow({ where: { tripId } });
+      await app.inject({
+        method: 'PATCH',
+        url: `/api/v1/financial/driver-payouts/${payout.id}/pay`,
+        headers: { authorization: `Bearer ${superAdmin.accessToken}` },
+      });
+      const second = await app.inject({
+        method: 'PATCH',
+        url: `/api/v1/financial/driver-payouts/${payout.id}/pay`,
+        headers: { authorization: `Bearer ${superAdmin.accessToken}` },
+      });
+      expect(second.statusCode).toBe(409);
+    });
+
+    it('payout listing and payment are denied for financial-only and students', async () => {
+      await setDriverFee(2000);
+      const financial = await createStaffUser('FINANCIAL');
+      const student = await createStudentUser();
+      const listForFinancial = await app.inject({
+        method: 'GET',
+        url: '/api/v1/financial/driver-payouts',
+        headers: { authorization: `Bearer ${financial.accessToken}` },
+      });
+      expect(listForFinancial.statusCode).toBe(200);
+      const listForStudent = await app.inject({
+        method: 'GET',
+        url: '/api/v1/financial/driver-payouts',
+        headers: { authorization: `Bearer ${student.accessToken}` },
+      });
+      expect(listForStudent.statusCode).toBe(403);
+      const payForFinancial = await app.inject({
+        method: 'PATCH',
+        url: `/api/v1/financial/driver-payouts/${'00000000-0000-4000-8000-000000000000'}/pay`,
+        headers: { authorization: `Bearer ${financial.accessToken}` },
+      });
+      expect(payForFinancial.statusCode).toBe(403);
     });
   });
 });

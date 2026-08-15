@@ -6,7 +6,11 @@ import { busService } from '../bus/bus.service.js';
 import { notificationService } from '../notifications/notification.service.js';
 import { env } from '../../shared/config/env.js';
 import type { Prisma } from '../../generated/prisma/client.js';
-import type { RefundStatus, SettlementStatus } from '../../generated/prisma/enums.js';
+import type {
+  DriverPayoutStatus,
+  RefundStatus,
+  SettlementStatus,
+} from '../../generated/prisma/enums.js';
 
 export interface PaginatedResult<T> {
   items: T[];
@@ -531,6 +535,84 @@ export class FinancialService {
       include: {
         operator: { select: { id: true, businessName: true } },
         vendor: { select: { id: true, businessName: true } },
+      },
+    });
+  }
+
+  // ---- Driver payouts ----
+
+  async listDriverPayouts(
+    page: number,
+    limit: number,
+    filters: { driverId?: string; status?: DriverPayoutStatus } = {},
+  ): Promise<PaginatedResult<unknown>> {
+    const where: Prisma.DriverTripPayoutWhereInput = {};
+    if (filters.driverId) where.driverId = filters.driverId;
+    if (filters.status) where.status = filters.status;
+
+    const [items, total] = await Promise.all([
+      prisma.driverTripPayout.findMany({
+        where,
+        include: {
+          driver: {
+            include: { user: { select: { id: true, fullName: true, phone: true } } },
+          },
+          trip: {
+            include: {
+              route: { select: { fromCity: true, toCity: true } },
+              operator: { select: { businessName: true } },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.driverTripPayout.count({ where }),
+    ]);
+    return { items, page, limit, total };
+  }
+
+  async markDriverPayoutPaid(
+    payoutId: string,
+    actorId: string,
+    actorRole: string,
+  ): Promise<unknown> {
+    const payout = await prisma.driverTripPayout.findUnique({
+      where: { id: payoutId },
+      include: { driver: { include: { user: true } } },
+    });
+    if (!payout) throw AppError.notFound('Driver payout not found');
+    if (payout.status !== 'PENDING') {
+      throw AppError.conflict(`Driver payout is already ${payout.status.toLowerCase()}`);
+    }
+
+    await prisma.driverTripPayout.update({
+      where: { id: payoutId },
+      data: { status: 'PAID', paidAt: new Date() },
+    });
+    await writeAuditLog({
+      actorId,
+      action: 'driver_payout.pay',
+      entity: 'driver_payout',
+      entityId: payoutId,
+      details: {
+        tripId: payout.tripId,
+        driverId: payout.driverId,
+        amount: Number(payout.amount),
+        role: actorRole,
+      },
+    });
+    return prisma.driverTripPayout.findUnique({
+      where: { id: payoutId },
+      include: {
+        driver: { include: { user: { select: { id: true, fullName: true, phone: true } } } },
+        trip: {
+          include: {
+            route: { select: { fromCity: true, toCity: true } },
+            operator: { select: { businessName: true } },
+          },
+        },
       },
     });
   }

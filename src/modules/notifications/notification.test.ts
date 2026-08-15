@@ -23,6 +23,7 @@ describe('notifications module', () => {
 
   beforeEach(async () => {
     await prisma.rating.deleteMany();
+    await prisma.driverTripPayout.deleteMany();
     await prisma.notificationPreference.deleteMany();
     await prisma.otpCode.deleteMany();
     await prisma.notification.deleteMany();

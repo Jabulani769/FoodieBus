@@ -18,6 +18,8 @@ import { notificationService } from '../notifications/notification.service.js';
 import { emitTripStatus } from '../../realtime/index.js';
 import { createUser } from '../auth/auth.service.js';
 import { ratingService } from '../ratings/rating.service.js';
+import { writeAuditLog } from '../../shared/audit/audit.js';
+import { env } from '../../shared/config/env.js';
 
 function statusToPhrase(status: TripStatus): string {
   return status.toLowerCase().replace('_', ' ');
@@ -354,6 +356,10 @@ export class BusService {
       await this.cancelTripBookings(tripId);
     }
 
+    if (status === 'COMPLETED') {
+      await this.createDriverPayout(tripId);
+    }
+
     await this.notifyTripPassengers(
       tripId,
       this.statusMessage(status, route, departureTime),
@@ -604,6 +610,34 @@ export class BusService {
       where: { id: driverId },
       include: { user: { select: { id: true, fullName: true, email: true, phone: true } } },
     });
+  }
+
+  private async createDriverPayout(tripId: string): Promise<void> {
+    const trip = await prisma.trip.findUnique({
+      where: { id: tripId },
+      select: { id: true, driverId: true },
+    });
+    if (!trip?.driverId) return;
+
+    const setting = await prisma.platformSetting.findUnique({
+      where: { key: 'driver_trip_fee' },
+    });
+    const fee = typeof setting?.value === 'number' ? setting.value : env.DRIVER_TRIP_FEE;
+    if (fee <= 0) return;
+
+    try {
+      await prisma.driverTripPayout.create({
+        data: { driverId: trip.driverId, tripId, amount: fee },
+      });
+      await writeAuditLog({
+        action: 'driver_payout.create',
+        entity: 'driver_payout',
+        details: { tripId, driverId: trip.driverId, amount: fee },
+      });
+    } catch (err) {
+      // One payout per (driver, trip) — a retry of a completed transition is idempotent.
+      if (!this.isUniqueViolation(err)) throw err;
+    }
   }
 
   async deleteTrip(tripId: string): Promise<void> {

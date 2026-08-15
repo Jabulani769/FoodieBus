@@ -47,6 +47,7 @@ describe('analytics module', () => {
     });
 
     await prisma.rating.deleteMany();
+    await prisma.driverTripPayout.deleteMany();
     await prisma.refund.deleteMany();
     await prisma.settlement.deleteMany();
     await prisma.payment.deleteMany();

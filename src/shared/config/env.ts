@@ -58,6 +58,9 @@ const envSchema = z.object({
   STORAGE_S3_PUBLIC_BASE_URL: z.string().url().optional(),
   STORAGE_MAX_SIZE_MB: z.coerce.number().int().min(1).default(5),
   STORAGE_ALLOWED_TYPES: z.string().default('image/jpeg,image/png,image/webp'),
+
+  // ---- Driver payouts ----
+  DRIVER_TRIP_FEE: z.coerce.number().nonnegative().default(0),
 });
 
 const parsed = envSchema.safeParse(process.env);

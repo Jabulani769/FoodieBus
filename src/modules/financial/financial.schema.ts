@@ -66,3 +66,20 @@ export const settlementIdParamsSchema = z.object({
     id: z.string().uuid('Invalid settlement id'),
   }),
 });
+
+const driverPayoutStatusSchema = z.enum(['PENDING', 'PAID']);
+
+export const listDriverPayoutsSchema = z.object({
+  querystring: z.object({
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+    driverId: z.string().uuid('Invalid driver id').optional(),
+    status: driverPayoutStatusSchema.optional(),
+  }),
+});
+
+export const driverPayoutIdParamsSchema = z.object({
+  params: z.object({
+    id: z.string().uuid('Invalid driver payout id'),
+  }),
+});

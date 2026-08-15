@@ -19,6 +19,7 @@ describe('ratings module', () => {
 
   beforeEach(async () => {
     await prisma.rating.deleteMany();
+    await prisma.driverTripPayout.deleteMany();
     await prisma.foodOrderItem.deleteMany();
     await prisma.foodOrder.deleteMany();
     await prisma.payment.deleteMany();
