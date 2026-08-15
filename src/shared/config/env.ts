@@ -46,6 +46,18 @@ const envSchema = z.object({
   SMTP_PORT: z.coerce.number().int().default(587),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
+
+  // ---- Storage ----
+  STORAGE_PROVIDER: z.enum(['mock', 's3']).default('mock'),
+  STORAGE_UPLOAD_DIR: z.string().default('./uploads'),
+  STORAGE_S3_BUCKET: z.string().optional(),
+  STORAGE_S3_REGION: z.string().default('us-east-1'),
+  STORAGE_S3_ACCESS_KEY_ID: z.string().optional(),
+  STORAGE_S3_SECRET_ACCESS_KEY: z.string().optional(),
+  STORAGE_S3_ENDPOINT: z.string().url().optional(),
+  STORAGE_S3_PUBLIC_BASE_URL: z.string().url().optional(),
+  STORAGE_MAX_SIZE_MB: z.coerce.number().int().min(1).default(5),
+  STORAGE_ALLOWED_TYPES: z.string().default('image/jpeg,image/png,image/webp'),
 });
 
 const parsed = envSchema.safeParse(process.env);

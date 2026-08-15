@@ -3,8 +3,13 @@ import cors from '@fastify/cors';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import sensible from '@fastify/sensible';
+import multipart from '@fastify/multipart';
+import fastifyStatic from '@fastify/static';
+import { resolve } from 'node:path';
+import { mkdirSync } from 'node:fs';
 import { logger } from './shared/logger/index.js';
 import { errorHandler } from './shared/errors/index.js';
+import { env } from './shared/config/index.js';
 import { prisma } from './shared/db/prisma.js';
 import { redis } from './shared/redis/index.js';
 import { registerHealthRoutes } from './modules/health/health.routes.js';
@@ -17,6 +22,7 @@ import { registerAdminRoutes } from './modules/admin/admin.routes.js';
 import { registerFinancialRoutes } from './modules/financial/financial.routes.js';
 import { registerAnalyticsRoutes } from './modules/analytics/analytics.routes.js';
 import { registerDeliveryRoutes } from './modules/delivery/delivery.routes.js';
+import { registerUploadRoutes } from './modules/uploads/upload.routes.js';
 
 export async function buildApp(options: FastifyServerOptions = {}) {
   const app = Fastify({
@@ -32,6 +38,20 @@ export async function buildApp(options: FastifyServerOptions = {}) {
   });
 
   await app.register(sensible);
+
+  await app.register(multipart, {
+    limits: { fileSize: env.STORAGE_MAX_SIZE_MB * 1024 * 1024 * 10 },
+  });
+
+  if (env.STORAGE_PROVIDER === 'mock') {
+    const uploadRoot = resolve(env.STORAGE_UPLOAD_DIR);
+    mkdirSync(uploadRoot, { recursive: true });
+    await app.register(fastifyStatic, {
+      root: uploadRoot,
+      prefix: '/uploads/',
+      decorateReply: false,
+    });
+  }
 
   await app.register(swagger, {
     openapi: {
@@ -70,6 +90,7 @@ export async function buildApp(options: FastifyServerOptions = {}) {
   await app.register(registerFinancialRoutes, { prefix: '/api/v1' });
   await app.register(registerAnalyticsRoutes, { prefix: '/api/v1' });
   await app.register(registerDeliveryRoutes, { prefix: '/api/v1' });
+  await app.register(registerUploadRoutes, { prefix: '/api/v1' });
 
   return app;
 }

@@ -39,3 +39,7 @@ src/generated/
 # Temporary
 tmp/
 .tmp/
+
+# Local uploads (mock storage)
+/uploads/
+/uploads-test/

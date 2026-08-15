@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Object storage & media uploads (Phase B)** — a pluggable storage layer plus a single authenticated upload endpoint that returns a public URL to store in `imageUrl`/`logoUrl` fields.
+  - **`src/shared/storage/`** — `StorageProvider` interface (`upload`, `delete`) with two implementations behind the `STORAGE_PROVIDER` env toggle (default `mock`):
+    - **Mock** (`STORAGE_PROVIDER=mock`): writes to `STORAGE_UPLOAD_DIR` (default `./uploads`) and serves it back via `@fastify/static` at `/uploads/*`; returns a `http://{host}:{port}/uploads/{key}` URL. Useful for local dev — no external services needed.
+    - **S3** (`STORAGE_PROVIDER=s3`): streams the file to an S3-compatible bucket (AWS S3, Cloudflare R2, DigitalOcean Spaces) via `@aws-sdk/client-s3` (new runtime dependency). Configured with `STORAGE_S3_BUCKET`/`STORAGE_S3_REGION`/`STORAGE_S3_ACCESS_KEY_ID`/`STORAGE_S3_SECRET_ACCESS_KEY`; `STORAGE_S3_ENDPOINT` + `forcePathStyle` enable compatible providers; `STORAGE_S3_PUBLIC_BASE_URL` overrides the public URL prefix.
+  - **`POST /uploads`** (`src/modules/uploads/upload.routes.ts`) — multipart upload (field `file`), authenticated for STUDENT/VENDOR/OPERATOR/ADMIN/SUPER_ADMIN. Validates MIME type against `STORAGE_ALLOWED_TYPES` (default `image/jpeg,image/png,image/webp`), streams through a size-limiting Transform capped at `STORAGE_MAX_SIZE_MB` (default 5), and stores under `{category}/{uuid}.{ext}` where `category` comes from the `?category=` query param (default `uploads`). Returns `{ url, key }` with a `201`, and writes an `upload.create` audit log entry.
+  - Registered in `app.ts`: `@fastify/multipart` (file-size ceiling 10× the limit so the app-level Transform stays authoritative) and, in mock mode only, `@fastify/static` with `decorateReply: false`.
+  - 10 integration tests (per-type happy paths, unsupported type, missing file, unauthenticated, invalid category, oversized file, static retrieval, audit log, provider singleton).
+  - Env: storage vars added to `env.ts` and `.env.example`; `.env.test` pins `STORAGE_PROVIDER=mock` + `uploads-test/`; `.gitignore` excludes local upload dirs.
+
 - **Real notification providers (Phase A)** — replaced the mock-only providers with working real-world integrations behind the existing `NotificationProvider` interface. Mocks remain the default (no external credentials needed for tests/local dev).
   - **SMS — Africa's Talking** (`SMS_PROVIDER=africastalking`): `POST /version1/messaging` with `apiKey` header + form-encoded `username`/`to`/`message`/`from`; maps per-recipient `status`/`messageId` and throws on failure. Requires `SMS_API_KEY` + new `SMS_API_USERNAME` (application username), optional `SMS_SENDER_ID`.
   - **WhatsApp — Meta Cloud API** (`WHATSAPP_PROVIDER=meta`): `POST /graph.facebook.com/v18.0/{phone_number_id}/messages` with a Bearer token; strips the leading `+` from phone numbers (Meta expects E.164 without `+`); parses `messages[].id` and surfaces `error.message` on failure. Requires `WHATSAPP_API_TOKEN` + `WHATSAPP_PHONE_NUMBER_ID`.
