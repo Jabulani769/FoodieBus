@@ -23,6 +23,7 @@ import { registerFinancialRoutes } from './modules/financial/financial.routes.js
 import { registerAnalyticsRoutes } from './modules/analytics/analytics.routes.js';
 import { registerDeliveryRoutes } from './modules/delivery/delivery.routes.js';
 import { registerUploadRoutes } from './modules/uploads/upload.routes.js';
+import { registerRatingRoutes } from './modules/ratings/rating.routes.js';
 
 export async function buildApp(options: FastifyServerOptions = {}) {
   const app = Fastify({
@@ -91,6 +92,7 @@ export async function buildApp(options: FastifyServerOptions = {}) {
   await app.register(registerAnalyticsRoutes, { prefix: '/api/v1' });
   await app.register(registerDeliveryRoutes, { prefix: '/api/v1' });
   await app.register(registerUploadRoutes, { prefix: '/api/v1' });
+  await app.register(registerRatingRoutes, { prefix: '/api/v1' });
 
   return app;
 }

@@ -17,6 +17,13 @@ enum Role {
   STUDENT
 }
 
+enum RatingEntityType {
+  TRIP
+  DISH
+  OPERATOR
+  VENDOR
+}
+
 model User {
   id           String   @id @default(uuid())
   email        String   @unique
@@ -41,6 +48,7 @@ model User {
   refundsRequested       Refund[] @relation("RefundRequestedBy")
   refundsApproved        Refund[] @relation("RefundApprovedBy")
   foodOrders             FoodOrder[]
+  ratings                Rating[]
 
   @@index([role])
   @@index([deletedAt])
@@ -514,4 +522,19 @@ model FoodOrderItem {
 
   @@index([foodOrderId])
   @@index([dishId])
+}
+
+model Rating {
+  id         String            @id @default(uuid())
+  userId     String
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entityType RatingEntityType
+  entityId   String
+  score      Int
+  comment    String?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  @@unique([userId, entityType, entityId])
+  @@index([entityType, entityId])
 }

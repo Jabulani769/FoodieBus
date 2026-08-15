@@ -1,5 +1,6 @@
 import { prisma } from '../../shared/db/prisma.js';
 import { AppError } from '../../shared/errors/AppError.js';
+import { ratingService } from '../ratings/rating.service.js';
 import type {
   CreateCategoryInput,
   CreateDishInput,
@@ -150,7 +151,9 @@ export class FoodService {
       },
     });
     if (!dish) throw AppError.notFound('Dish not found');
-    return dish;
+
+    const rating = await ratingService.getRatingSummary('DISH', id);
+    return { ...dish, rating };
   }
 
   async createDish(vendorId: string, data: CreateDishInput): Promise<{ id: string }> {

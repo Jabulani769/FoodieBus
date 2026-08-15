@@ -44,6 +44,7 @@ describe('financial module', () => {
       status: 'processed',
     });
 
+    await prisma.rating.deleteMany();
     await prisma.refund.deleteMany();
     await prisma.settlement.deleteMany();
     await prisma.payment.deleteMany();

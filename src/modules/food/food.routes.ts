@@ -401,6 +401,10 @@ export async function registerFoodRoutes(app: FastifyInstance): Promise<void> {
                   slug: { type: 'string' },
                 },
               },
+              rating: {
+                type: 'object',
+                properties: { average: { type: 'number' }, count: { type: 'integer' } },
+              },
             },
           },
         },

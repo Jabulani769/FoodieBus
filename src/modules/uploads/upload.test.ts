@@ -25,6 +25,7 @@ describe('uploads module', () => {
 
   beforeEach(async () => {
     resetStorageProvider();
+    await prisma.rating.deleteMany();
     await prisma.notificationPreference.deleteMany();
     await prisma.otpCode.deleteMany();
     await prisma.notification.deleteMany();

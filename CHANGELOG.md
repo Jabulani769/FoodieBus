@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Ratings & reviews (Phase C)** — students can now rate trips, dishes, operators, and vendors, with aggregates surfaced on the existing trip/dish detail endpoints.
+  - **Schema**: new `RatingEntityType` enum (`TRIP | DISH | OPERATOR | VENDOR`) and a polymorphic `Rating` model (`userId`, `entityType`, `entityId`, `score` 1–5, `comment?`) with a unique constraint on `(userId, entityType, entityId)` so one user rates an entity once, plus an index on `(entityType, entityId)` (migration `ratings_module`).
+  - **Eligibility** (enforced in `rating.service`): `TRIP` and `OPERATOR` require a `CONFIRMED` booking by the student (on that trip / on a trip owned by that operator); `DISH` and `VENDOR` require a `DELIVERED_TO_BUS` food order (dish must be in the order; vendor from the order). Non-participants get `403`, duplicates `409`, unknown entities `404`.
+  - **Endpoints** under `/api/v1/ratings`: `POST /ratings` (STUDENT) creates; `GET /ratings` lists (paginated, filterable by `entityType` + `entityId`); `PATCH /ratings/:id` and `DELETE /ratings/:id` update/delete own ratings (ownership enforced → `403`). All mutations write an audit log (`rating.create`/`update`/`delete`).
+  - **Aggregates**: `GET /trips/:id` and `GET /dishes/:id` now return a `rating: { average, count }` object (via `ratingService.getRatingSummary`, `_avg`/`_count`).
+  - 18 integration tests (per-type happy paths, duplicate `409`, non-participant `403`, score bounds, unknown entity, unauthenticated, non-student role, update/delete ownership, filtered listing, aggregate math on trip + dish, zero aggregate). Every test `beforeEach` now wipes `Rating` before its parents (G4).
+
 - **Object storage & media uploads (Phase B)** — a pluggable storage layer plus a single authenticated upload endpoint that returns a public URL to store in `imageUrl`/`logoUrl` fields.
   - **`src/shared/storage/`** — `StorageProvider` interface (`upload`, `delete`) with two implementations behind the `STORAGE_PROVIDER` env toggle (default `mock`):
     - **Mock** (`STORAGE_PROVIDER=mock`): writes to `STORAGE_UPLOAD_DIR` (default `./uploads`) and serves it back via `@fastify/static` at `/uploads/*`; returns a `http://{host}:{port}/uploads/{key}` URL. Useful for local dev — no external services needed.

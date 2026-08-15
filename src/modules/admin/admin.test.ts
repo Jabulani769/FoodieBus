@@ -17,6 +17,7 @@ describe('admin module', () => {
   });
 
   beforeEach(async () => {
+    await prisma.rating.deleteMany();
     await prisma.platformSetting.deleteMany();
     await prisma.notificationPreference.deleteMany();
     await prisma.otpCode.deleteMany();

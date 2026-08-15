@@ -585,6 +585,10 @@ export async function registerBusRoutes(app: FastifyInstance): Promise<void> {
                   },
                 },
               },
+              rating: {
+                type: 'object',
+                properties: { average: { type: 'number' }, count: { type: 'integer' } },
+              },
             },
           },
         },

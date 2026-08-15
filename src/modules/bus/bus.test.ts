@@ -17,6 +17,7 @@ describe('bus module', () => {
   });
 
   beforeEach(async () => {
+    await prisma.rating.deleteMany();
     await prisma.payment.deleteMany();
     await prisma.foodOrderItem.deleteMany();
     await prisma.foodOrder.deleteMany();

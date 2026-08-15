@@ -17,6 +17,7 @@ import type { BookingStatus, TripStatus, Role } from '../../generated/prisma/enu
 import { notificationService } from '../notifications/notification.service.js';
 import { emitTripStatus } from '../../realtime/index.js';
 import { createUser } from '../auth/auth.service.js';
+import { ratingService } from '../ratings/rating.service.js';
 
 function statusToPhrase(status: TripStatus): string {
   return status.toLowerCase().replace('_', ' ');
@@ -238,7 +239,9 @@ export class BusService {
       },
     });
     if (!trip) throw AppError.notFound('Trip not found');
-    return trip;
+
+    const rating = await ratingService.getRatingSummary('TRIP', id);
+    return { ...trip, rating };
   }
 
   async createTrip(operatorId: string, data: CreateTripInput): Promise<{ id: string }> {

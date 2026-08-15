@@ -42,6 +42,7 @@ describe('payments module', () => {
       checkoutUrl: 'https://checkout.test/fb-default',
       txRef: `FB-${Math.random().toString(36).slice(2, 10)}`,
     });
+    await prisma.rating.deleteMany();
     await prisma.payment.deleteMany();
     await prisma.foodOrderItem.deleteMany();
     await prisma.foodOrder.deleteMany();
