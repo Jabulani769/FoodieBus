@@ -256,12 +256,17 @@ export class FinancialService {
     to: string;
     totalRevenue: string;
     totalPayments: number;
+    foodOrders: number;
     refunds: string;
     daily: { date: string; revenue: string; payments: number }[];
   }> {
     const payments = await prisma.payment.findMany({
       where: { status: 'PAID', paidAt: { gte: from, lte: to } },
       select: { amount: true, paidAt: true },
+    });
+    const foodOrders = await prisma.foodOrder.findMany({
+      where: { status: 'DELIVERED_TO_BUS', updatedAt: { gte: from, lte: to } },
+      select: { totalAmount: true, updatedAt: true },
     });
     const refunds = await prisma.refund.findMany({
       where: { status: 'PROCESSED', processedAt: { gte: from, lte: to } },
@@ -276,6 +281,12 @@ export class FinancialService {
       entry.payments += 1;
       dailyMap.set(day, entry);
     }
+    for (const o of foodOrders) {
+      const day = o.updatedAt!.toISOString().slice(0, 10);
+      const entry = dailyMap.get(day) ?? { revenue: 0, payments: 0 };
+      entry.revenue += Number(o.totalAmount);
+      dailyMap.set(day, entry);
+    }
     const daily = [...dailyMap.entries()]
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([date, { revenue, payments }]) => ({
@@ -287,8 +298,12 @@ export class FinancialService {
     return {
       from: from.toISOString(),
       to: to.toISOString(),
-      totalRevenue: payments.reduce((sum, p) => sum + Number(p.amount), 0).toFixed(2),
+      totalRevenue: (
+        payments.reduce((sum, p) => sum + Number(p.amount), 0) +
+        foodOrders.reduce((sum, o) => sum + Number(o.totalAmount), 0)
+      ).toFixed(2),
       totalPayments: payments.length,
+      foodOrders: foodOrders.length,
       refunds: refunds.reduce((sum, r) => sum + Number(r.amount), 0).toFixed(2),
       daily,
     };
@@ -308,6 +323,12 @@ export class FinancialService {
         },
       },
     });
+    const foodOrders = await prisma.foodOrder.findMany({
+      where: { status: 'DELIVERED_TO_BUS', updatedAt: { gte: from, lte: to } },
+      include: {
+        trip: { include: { route: { select: { fromCity: true, toCity: true } } } },
+      },
+    });
 
     const routeMap = new Map<string, { revenue: number; payments: number }>();
     for (const p of payments) {
@@ -315,6 +336,12 @@ export class FinancialService {
       const entry = routeMap.get(route) ?? { revenue: 0, payments: 0 };
       entry.revenue += Number(p.amount);
       entry.payments += 1;
+      routeMap.set(route, entry);
+    }
+    for (const o of foodOrders) {
+      const route = `${o.trip.route.fromCity} → ${o.trip.route.toCity}`;
+      const entry = routeMap.get(route) ?? { revenue: 0, payments: 0 };
+      entry.revenue += Number(o.totalAmount);
       routeMap.set(route, entry);
     }
 
@@ -454,6 +481,40 @@ export class FinancialService {
       const settlement = await prisma.settlement.create({
         data: {
           operatorId: operator.id,
+          period,
+          grossRevenue: grossAmount,
+          commissionRate,
+          commissionAmt,
+          netPayout: net,
+        },
+      });
+      created.push(settlement);
+    }
+
+    const vendors = await prisma.vendorProfile.findMany({ select: { id: true } });
+
+    for (const vendor of vendors) {
+      const gross = await prisma.foodOrder.aggregate({
+        where: {
+          status: 'DELIVERED_TO_BUS',
+          updatedAt: { gte: startOfMonth, lt: startOfNextMonth },
+          vendorId: vendor.id,
+        },
+        _sum: { totalAmount: true },
+      });
+      const grossAmount = Number(gross._sum.totalAmount ?? 0);
+      if (grossAmount <= 0) continue;
+
+      const commissionAmt = grossAmount * commissionRate;
+      const net = grossAmount - commissionAmt;
+      const existing = await prisma.settlement.findUnique({
+        where: { vendorId_period: { vendorId: vendor.id, period } },
+      });
+      if (existing) continue;
+
+      const settlement = await prisma.settlement.create({
+        data: {
+          vendorId: vendor.id,
           period,
           grossRevenue: grossAmount,
           commissionRate,

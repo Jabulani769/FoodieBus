@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Food-order settlement & vendor payouts (Phase E)** — settlements now cover vendors, not just operators, and revenue reports count delivered food orders.
+  - **Schema**: no migration needed — the `Settlement` model already carried `vendorId` (optional) with a unique `(vendorId, period)` constraint and its `VendorProfile` relation; the generation logic was the only gap.
+  - **Settlement generation**: `POST /financial/settlements/generate` now also iterates active vendors and creates a settlement from `totalAmount` of `DELIVERED_TO_BUS` food orders whose `updatedAt` falls in the period (only delivered orders count as recognized revenue — `PLACED`/`PREPARING`/`READY`/`CANCELLED` are excluded). Commission uses the same `commission_rate` `PlatformSetting`, and idempotency is preserved per `(vendorId, period)`.
+  - **Revenue reports**: `GET /financial/reports/revenue` now includes delivered food-order revenue in `totalRevenue` and the daily breakdown, and reports a new `foodOrders` count; `GET /financial/reports/revenue/by-route` folds delivered food-order revenue into the route totals. `revenue/by-operator` and the payments CSV stay booking-only (operators vs. vendors are distinct revenue streams).
+  - 5 new integration tests (vendor settlement from delivered orders with correct gross/commission/net, exclusion of non-delivered orders, idempotency per vendor+period, vendor filter on the settlements listing, food-order revenue in reports).
+
 - **Driver payments & payouts (Phase D)** — drivers earn a flat per-trip fee automatically when an assigned trip reaches `COMPLETED`, and finance staff can track and pay those earnings.
   - **Schema**: new `DriverPayoutStatus` enum (`PENDING | PAID`) and a `DriverTripPayout` model (`driverId` → `DriverProfile`, `tripId` → `Trip`, `amount`, `status`, `paidAt?`), with a unique `(driverId, tripId)` constraint so one payout is created per driver per trip (migration `driver_payout`).
   - **Auto-creation**: when a trip transitions to `COMPLETED` in `bus.service.updateTripStatus`, a `PENDING` payout is created for the assigned driver (skipped when no driver is assigned). The per-trip fee comes from the `driver_trip_fee` `PlatformSetting` (override) or the `DRIVER_TRIP_FEE` env var (default `0` — no payout when unset). The unique constraint makes the transition idempotent; a `driver_payout.create` audit log records each payout.

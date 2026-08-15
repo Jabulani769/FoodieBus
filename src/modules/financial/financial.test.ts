@@ -3,6 +3,7 @@ import { buildApp } from '../../app.js';
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../../shared/db/prisma.js';
 import { createUser } from '../auth/auth.service.js';
+import { busService } from '../bus/bus.service.js';
 
 vi.mock('../payments/paychangu.js', () => ({
   paychangu: {
@@ -237,6 +238,86 @@ describe('financial module', () => {
     });
     expect(complete.statusCode).toBe(200);
     return { operator, tripId, driverId };
+  }
+
+  async function createVendorUser(name = 'Test Vendor') {
+    const user = await createTestUser({ fullName: name, role: 'VENDOR' });
+    const login = await loginAs(user.email, 'password123');
+    return {
+      user,
+      email: user.email,
+      accessToken: login.json().accessToken,
+      vendorProfile: await prisma.vendorProfile.findUnique({ where: { userId: user.id } }),
+    };
+  }
+
+  // Creates a confirmed booking, a dish, a delivered food order, and returns details.
+  async function createDeliveredFoodOrder(price = 5000, quantity = 2) {
+    const operator = await createOperatorUser();
+    const student = await createStudentUser();
+    const vendor = await createVendorUser();
+    const route = await prisma.route.create({
+      data: { fromCity: 'Lilongwe', toCity: 'Mzuzu', basePrice: 15000, distanceKm: 350 },
+    });
+    const bus = await prisma.bus.create({
+      data: {
+        operatorId: operator.operatorProfile!.id,
+        name: 'Coach',
+        plateNumber: `BC-${Math.random().toString(36).slice(2, 8)}`,
+        capacity: 3,
+      },
+    });
+    const tripRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/trips',
+      headers: { authorization: `Bearer ${operator.accessToken}` },
+      payload: {
+        routeId: route.id,
+        busId: bus.id,
+        departureTime: '2026-08-20T08:00:00+02:00',
+        arrivalTime: '2026-08-20T12:30:00+02:00',
+        price: 18000,
+      },
+    });
+    expect(tripRes.statusCode).toBe(201);
+    const tripId = tripRes.json().id as string;
+    const seat = await prisma.seatInventory.findFirst({
+      where: { tripId, status: 'AVAILABLE' },
+    });
+    const booking = await busService.createBooking(tripId, seat!.seatNumber, student.user.id, {
+      passengerName: 'Jane Doe',
+      passengerPhone: '+265991111222',
+    });
+    await busService.confirmBooking(booking.id);
+
+    const category = await prisma.foodCategory.create({
+      data: {
+        name: `Cat-${Math.random().toString(36).slice(2)}`,
+        slug: `cat-${Math.random().toString(36).slice(2)}`,
+      },
+    });
+    const dish = await prisma.dish.create({
+      data: {
+        vendorId: vendor.vendorProfile!.id,
+        categoryId: category.id,
+        name: `Dish-${Math.random().toString(36).slice(2)}`,
+        price,
+        isAvailable: true,
+      },
+    });
+    const orderRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/food-orders',
+      headers: { authorization: `Bearer ${student.accessToken}` },
+      payload: { bookingId: booking.id, items: [{ dishId: dish.id, quantity }] },
+    });
+    expect(orderRes.statusCode).toBe(201);
+    const orderId = orderRes.json().id as string;
+    await prisma.foodOrder.update({
+      where: { id: orderId },
+      data: { status: 'DELIVERED_TO_BUS' },
+    });
+    return { vendor, tripId, bookingId: booking.id, orderId, dishId: dish.id };
   }
 
   describe('Refund lifecycle', () => {
@@ -610,6 +691,154 @@ describe('financial module', () => {
         payload: { period: '2026-08' },
       });
       expect(res.statusCode).toBe(403);
+    });
+  });
+
+  describe('Vendor settlements', () => {
+    it('POST /financial/settlements/generate creates vendor settlements from delivered food orders', async () => {
+      const superAdmin = await createStaffUser('SUPER_ADMIN');
+      const { vendor } = await createDeliveredFoodOrder(5000, 2);
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/v1/financial/settlements/generate',
+        headers: { authorization: `Bearer ${superAdmin.accessToken}` },
+        payload: { period: '2026-08' },
+      });
+      expect(res.statusCode).toBe(200);
+      const vendorSettlement = res
+        .json()
+        .items.find((s: { vendorId?: string }) => s.vendorId === vendor.vendorProfile!.id);
+      expect(vendorSettlement).toBeTruthy();
+      expect(vendorSettlement.grossRevenue.toString()).toBe('10000');
+      expect(vendorSettlement.commissionRate.toString()).toBe('0.1');
+      expect(vendorSettlement.commissionAmt.toString()).toBe('1000');
+      expect(vendorSettlement.netPayout.toString()).toBe('9000');
+    });
+
+    it('excludes non-delivered food orders from vendor settlements', async () => {
+      const superAdmin = await createStaffUser('SUPER_ADMIN');
+      const operator = await createOperatorUser();
+      const student = await createStudentUser();
+      const vendor = await createVendorUser();
+      const route = await prisma.route.create({
+        data: { fromCity: 'Lilongwe', toCity: 'Blantyre', basePrice: 12000, distanceKm: 300 },
+      });
+      const bus = await prisma.bus.create({
+        data: {
+          operatorId: operator.operatorProfile!.id,
+          name: 'Coach',
+          plateNumber: `BC-${Math.random().toString(36).slice(2, 8)}`,
+          capacity: 3,
+        },
+      });
+      const tripRes = await app.inject({
+        method: 'POST',
+        url: '/api/v1/trips',
+        headers: { authorization: `Bearer ${operator.accessToken}` },
+        payload: {
+          routeId: route.id,
+          busId: bus.id,
+          departureTime: '2026-08-20T08:00:00+02:00',
+          arrivalTime: '2026-08-20T12:30:00+02:00',
+          price: 18000,
+        },
+      });
+      const tripId = tripRes.json().id as string;
+      const seat = await prisma.seatInventory.findFirst({
+        where: { tripId, status: 'AVAILABLE' },
+      });
+      const booking = await busService.createBooking(tripId, seat!.seatNumber, student.user.id, {
+        passengerName: 'Jane Doe',
+        passengerPhone: '+265991111222',
+      });
+      await busService.confirmBooking(booking.id);
+      const category = await prisma.foodCategory.create({
+        data: {
+          name: `Cat-${Math.random().toString(36).slice(2)}`,
+          slug: `cat-${Math.random().toString(36).slice(2)}`,
+        },
+      });
+      const dish = await prisma.dish.create({
+        data: {
+          vendorId: vendor.vendorProfile!.id,
+          categoryId: category.id,
+          name: `Dish-${Math.random().toString(36).slice(2)}`,
+          price: 5000,
+          isAvailable: true,
+        },
+      });
+      const orderRes = await app.inject({
+        method: 'POST',
+        url: '/api/v1/food-orders',
+        headers: { authorization: `Bearer ${student.accessToken}` },
+        payload: { bookingId: booking.id, items: [{ dishId: dish.id, quantity: 2 }] },
+      });
+      expect(orderRes.statusCode).toBe(201);
+      // Leave the order PLACED — it must not count toward vendor revenue.
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/v1/financial/settlements/generate',
+        headers: { authorization: `Bearer ${superAdmin.accessToken}` },
+        payload: { period: '2026-08' },
+      });
+      expect(res.statusCode).toBe(200);
+      const vendorSettlement = res
+        .json()
+        .items.find((s: { vendorId?: string }) => s.vendorId === vendor.vendorProfile!.id);
+      expect(vendorSettlement).toBeUndefined();
+    });
+
+    it('vendor settlement generation is idempotent per (vendor, period)', async () => {
+      const superAdmin = await createStaffUser('SUPER_ADMIN');
+      await createDeliveredFoodOrder(5000, 2);
+      await app.inject({
+        method: 'POST',
+        url: '/api/v1/financial/settlements/generate',
+        headers: { authorization: `Bearer ${superAdmin.accessToken}` },
+        payload: { period: '2026-08' },
+      });
+      const second = await app.inject({
+        method: 'POST',
+        url: '/api/v1/financial/settlements/generate',
+        headers: { authorization: `Bearer ${superAdmin.accessToken}` },
+        payload: { period: '2026-08' },
+      });
+      expect(second.statusCode).toBe(200);
+      expect(second.json().items.length).toBe(0);
+      expect(await prisma.settlement.count({ where: { vendorId: { not: null } } })).toBe(1);
+    });
+
+    it('GET /financial/settlements lists vendor settlements with a vendorId filter', async () => {
+      const superAdmin = await createStaffUser('SUPER_ADMIN');
+      const { vendor } = await createDeliveredFoodOrder(5000, 2);
+      await app.inject({
+        method: 'POST',
+        url: '/api/v1/financial/settlements/generate',
+        headers: { authorization: `Bearer ${superAdmin.accessToken}` },
+        payload: { period: '2026-08' },
+      });
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/v1/financial/settlements?vendorId=${vendor.vendorProfile!.id}&period=2026-08`,
+        headers: { authorization: `Bearer ${superAdmin.accessToken}` },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().total).toBe(1);
+      expect(res.json().items[0].vendor.businessName).toBe('Test Vendor');
+      expect(res.json().items[0].operator).toBeNull();
+    });
+
+    it('revenue reports include food-order revenue', async () => {
+      const staff = await createStaffUser('SUPER_ADMIN');
+      await createDeliveredFoodOrder(5000, 2);
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/v1/financial/reports/revenue?from=2026-01-01T00:00:00.000Z&to=2026-12-31T23:59:59.999Z',
+        headers: { authorization: `Bearer ${staff.accessToken}` },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().foodOrders).toBe(1);
+      expect(res.json().totalRevenue).toBe('10000.00');
     });
   });
 
