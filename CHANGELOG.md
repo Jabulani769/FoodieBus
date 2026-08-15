@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Analytics module (module 8)** — read-only business-intelligence endpoints under `/api/v1/analytics` (ADMIN, FINANCIAL, or SUPER_ADMIN). No new schema; everything is derived from existing data.
+  - **Platform overview**: `GET /analytics/platform/overview` — new users, bookings, revenue, paid payments, new operators, new vendors for a range with an automatic same-duration previous period and `changePercent` per metric; `GET /analytics/platform/growth` — time-series of users/bookings/revenue at daily/weekly/monthly granularity (in-memory bucketing, no `DATE_TRUNC` dependency).
+  - **Seat utilization**: `GET /analytics/utilization/trips` (per trip, optional `routeId`/`operatorId` filters), `/routes` and `/operators` (aggregated capacity/booked/utilization).
+  - **Conversion funnels**: `GET /analytics/funnel/bookings` (PENDING/CONFIRMED/CANCELLED/EXPIRED + conversion/cancellation/expiry rates), `/payments` (PENDING/PAID/FAILED/REFUNDED + success/failure/refund rates).
+  - **Passengers**: `GET /analytics/passengers/overview` (unique passengers, repeat rate, avg bookings per passenger, top route) and `/top` (sorted by bookings or spend).
+  - **Notifications**: `GET /analytics/notifications/delivery-rate` (per-channel sent/delivered/failed + rate) and `/failures` (failure-reason distribution).
+  - **Refunds**: `GET /analytics/refunds/summary` (requests by status, approval rate, refund rate vs paid revenue, total refunded).
+  - 17 integration tests.
+
 - **Financial module (module 7)**:
   - **Refund lifecycle**: `POST /financial/refunds` (financial/super admin) requests a refund against a PAID payment (amount ≤ refundable balance, reason required); `GET /financial/refunds` lists with status/date filters; `GET /financial/refunds/:id` shows payment + booking + actors; `PATCH /financial/refunds/:id/approve` and `/reject` (super admin); `POST /financial/refunds/:id/process` calls the PayChangu refund API, then flips the payment to `REFUNDED`, cancels the booking via the new `busService.forceCancelBooking`, releases the seat, and notifies the passenger. Gateway failures leave the refund `FAILED` with the reason.
   - **Revenue reports**: `GET /financial/reports/revenue` (daily breakdown + totals + refunded amount), `GET /financial/reports/revenue/by-route` and `/by-operator` (grouped sums), and `GET /financial/reports/payments/export` returning a `text/csv` download of all paid payments in a range.
