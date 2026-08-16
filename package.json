@@ -10,6 +10,10 @@
   "engines": {
     "node": ">=22"
   },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "tsx watch --env-file=.env src/server.ts",
     "build": "tsc -p tsconfig.build.json",
@@ -29,7 +33,13 @@
     "db:reset": "prisma migrate reset",
     "db:test:setup": "tsx scripts/setup-test-db.ts",
     "bootstrap:super-admin": "tsx scripts/bootstrap-super-admin.ts",
-    "prepare": "husky"
+    "prepare": "husky",
+    "dev:vendor": "npm run dev --workspace=@foodiebus/web-vendor",
+    "dev:admin": "npm run dev --workspace=@foodiebus/web-admin",
+    "dev:financial": "npm run dev --workspace=@foodiebus/web-financial",
+    "build:web": "npm run build --workspaces --if-present",
+    "lint:web": "npm run lint --workspaces --if-present",
+    "typecheck:web": "npm run typecheck --workspaces --if-present"
   },
   "lint-staged": {
     "*.{ts,tsx}": [
@@ -90,6 +100,7 @@
     "prisma@7.9.1": true,
     "argon2@0.45.1": true,
     "esbuild@0.28.2": true,
-    "msgpackr-extract@3.0.4": true
+    "msgpackr-extract@3.0.4": true,
+    "esbuild@0.25.12": true
   }
 }

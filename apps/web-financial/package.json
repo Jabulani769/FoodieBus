@@ -1,0 +1,37 @@
+{
+  "name": "@foodiebus/web-financial",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "lint": "eslint src",
+    "typecheck": "tsc -b --noEmit"
+  },
+  "dependencies": {
+    "@ant-design/charts": "^2.3.0",
+    "@ant-design/icons": "^5.5.0",
+    "@ant-design/pro-components": "^2.8.0",
+    "@foodiebus/api-client": "*",
+    "@foodiebus/auth": "*",
+    "@foodiebus/types": "*",
+    "@foodiebus/ui": "*",
+    "@tanstack/react-query": "^5.62.0",
+    "antd": "^5.22.0",
+    "dayjs": "^1.11.13",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router-dom": "^7.1.0",
+    "socket.io-client": "^4.8.0",
+    "zustand": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.0"
+  }
+}
