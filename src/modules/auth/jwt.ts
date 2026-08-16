@@ -33,6 +33,7 @@ export function signAccessToken(user: {
   return jwt.sign(payload, env.JWT_ACCESS_SECRET, {
     expiresIn: env.JWT_ACCESS_TTL as jwt.SignOptions['expiresIn'],
     issuer: 'foodiebus',
+    algorithm: 'HS256',
   });
 }
 
@@ -41,6 +42,7 @@ export function signRefreshToken(userId: string): string {
   return jwt.sign(payload, env.JWT_REFRESH_SECRET, {
     expiresIn: env.JWT_REFRESH_TTL as jwt.SignOptions['expiresIn'],
     issuer: 'foodiebus',
+    algorithm: 'HS256',
   });
 }
 
@@ -48,6 +50,7 @@ export function verifyAccessToken(token: string): AccessTokenPayload | null {
   try {
     const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET, {
       issuer: 'foodiebus',
+      algorithms: ['HS256'],
     });
     if (typeof decoded === 'string' || decoded.type !== 'access') return null;
     return decoded as AccessTokenPayload;
@@ -60,6 +63,7 @@ export function verifyRefreshToken(token: string): RefreshTokenPayload | null {
   try {
     const decoded = jwt.verify(token, env.JWT_REFRESH_SECRET, {
       issuer: 'foodiebus',
+      algorithms: ['HS256'],
     });
     if (typeof decoded === 'string' || decoded.type !== 'refresh') return null;
     return decoded as RefreshTokenPayload;

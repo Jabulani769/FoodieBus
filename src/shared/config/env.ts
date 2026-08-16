@@ -6,6 +6,7 @@ const envSchema = z.object({
   HOST: z.string().default('0.0.0.0'),
   PORT: z.coerce.number().int().min(1).max(65535).default(8080),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
+  RATE_LIMIT_ENABLED: z.enum(['true', 'false']).default('true'),
 
   DATABASE_URL: z.string().url().min(1),
 
@@ -69,6 +70,23 @@ if (!parsed.success) {
   const issues = parsed.error.issues.map((i) => `  - ${i.path.join('.')}: ${i.message}`).join('\n');
   console.error(`[config] Invalid environment variables — failing fast:\n${issues}`);
   process.exit(1);
+}
+
+const KNOWN_WEAK_JWT_SECRETS = new Set([
+  'change_me_generate_a_long_random_secret_48_chars_min',
+  'change_me_generate_a_different_long_random_secret_48_chars_min',
+]);
+
+for (const [name, secret] of [
+  ['JWT_ACCESS_SECRET', parsed.data.JWT_ACCESS_SECRET],
+  ['JWT_REFRESH_SECRET', parsed.data.JWT_REFRESH_SECRET],
+] as const) {
+  if (KNOWN_WEAK_JWT_SECRETS.has(secret)) {
+    console.error(
+      `[config] ${name} is set to a known default value and must be replaced with a random secret — failing fast`,
+    );
+    process.exit(1);
+  }
 }
 
 export const env = parsed.data;

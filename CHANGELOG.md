@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Phase 4 — Ops hardening & security audit fixes**: observability (request-id logging + Prometheus `/metrics`), rate limiting, a load-test harness, and remediation of the 11 confirmed findings from the security audit.
+  - **Observability**: every request gets a `request-id` (echoed in logs and the `X-Request-Id` response header); `GET /api/v1/metrics` exposes Prometheus counters/gauges (`http_requests_total`, `http_request_duration_seconds`, `http_errors_total`, `http_active_requests`, `db_query_duration_seconds`), gated by a `METRICS_ENABLED` env var.
+  - **Rate limiting**: `@fastify/rate-limit` global + per-route limits — login, OTP/forgot/reset-password (10/min/IP), payment init/verify/webhook, uploads, and manifest endpoints all rate-limited. Configurable via `RATE_LIMIT_ENABLED` (default on; off in tests where the login suite exceeds the 10/min login cap).
+  - **Load harness**: `ops/load/loadtest.mjs` — a Node script that hammers login, trip search, and booking creation against a running API (reporting p95/p99/error-rate) for load/soak validation.
+  - **Security audit**: an independent audit (`~/security-audit-skill/foodiebus/run-1/`) confirmed 11 findings; all fixed (see Changed) and verified by the full 273-test suite.
+
 - **Web dashboards (Phase II Phase 1)** — three React + Vite + TypeScript apps in an npm-workspaces monorepo consuming the existing backend API, plus four shared packages.
   - **Monorepo**: root `package.json` gains `workspaces: ["apps/*", "packages/*"]` and scripts `dev:vendor`, `dev:admin`, `dev:financial`, `build:web`, `lint:web`, `typecheck:web`. Root eslint ignores `apps/`/`packages/` (each workspace lints with its own config).
   - **Shared packages**: `@foodiebus/types` (domain types: user, food, bus, payment, rating, admin, financial, analytics), `@foodiebus/api-client` (axios client with 401-refresh interceptor + an `Api` class covering all 116 endpoints, plus `createHttpClient`/`extractError`), `@foodiebus/auth` (tokenStore, `AuthProvider`, `AuthGuard`/`RoleGuard`, `useAuth`), `@foodiebus/ui` (Ant Design theme, money/date formatters, `StatusBadge`, `StatCard`).
@@ -192,6 +198,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Prisma schema: `RefreshToken`, `AuditLog` models + migration `auth_refresh_audit`.
 
 ### Fixed
+
+- **Security audit findings (Phase 4)** — 11 confirmed findings remediated:
+  - **F1 (HIGH) — ADMIN could mint a SUPER_ADMIN**: `createUser`/`createInvitedUser` now take an `actorRole` and enforce a role hierarchy (`assertCanAssignRole`) — only SUPER_ADMIN may create/invite SUPER_ADMIN or ADMIN; ADMIN creates roles strictly below ADMIN; OPERATOR creates OPERATOR/DRIVER/STUDENT. Routes pass the authenticated actor's role; bootstrap script passes SUPER_ADMIN.
+  - **F2 (HIGH) — manifest IDOR**: `getManifest(tripId, actorId)` now enforces ownership — the actor must be the trip's assigned driver or its operator's user, else `403`.
+  - **F3 (HIGH) — TOCTOU double-refund**: `processRefund` atomically claims the `APPROVED → PROCESSED` transition via a conditional `updateMany` before calling the gateway (a concurrent duplicate is rejected before any money moves); a partial unique index (`Refund_paymentId_status_active_key`) prevents two active refunds per payment; `requestRefund` maps the resulting `P2002` to a clean `409`.
+  - **F4 (MEDIUM) — partial refund cancelled the whole booking**: a refund only marks the payment `REFUNDED` and force-cancels the booking when it covers the full amount; partial refunds leave the booking intact and the remainder refundable.
+  - **F5 (HIGH) — paid CONFIRMED booking could be cancelled**: `cancelBooking` rejects cancellation when the booking has a `PAID` payment ("request a refund"), and `verifyAndConfirm` auto-requests a refund when a payment lands on an already-cancelled/expired booking.
+  - **F6 (HIGH) — expiry worker raced the webhook**: `expireStalePayments` verifies with the gateway (`paychangu.verify`) before expiring — a confirmed paid payment marks the booking `CONFIRMED` instead of releasing the seat; `expireBooking`/`confirmBooking` are now atomic (`updateMany` on `PENDING` + count check).
+  - **F7 (MEDIUM) — trip cancellation gave no refunds**: `cancelTripBookings` auto-creates a `REQUESTED` refund (with passenger notification) for every `CONFIRMED` booking that has a `PAID` payment.
+  - **F8 (MEDIUM) — ratings before interaction / surviving cancellation**: TRIP and OPERATOR ratings now require a `COMPLETED` trip; cancelling a booking (or a cancelled trip) deletes the passenger's related trip/operator ratings.
+  - **F9 (LOW) — account enumeration**: `resetPassword` returns the same generic message for an unknown identifier and a wrong code.
+  - **F10 (MEDIUM) — CSV formula injection**: `csvEscape` neutralizes cells starting with `=`, `+`, `-`, `@`, tab, or CR by prefixing an apostrophe.
+  - **F11 (HIGH) — default JWT secrets**: the app fails fast if `JWT_ACCESS_SECRET`/`JWT_REFRESH_SECRET` are known defaults; JWT sign/verify pin `algorithm: HS256` / `algorithms: ['HS256']`.
 
 - **Refresh token collision**: two refresh tokens issued to the same user within one second produced identical JWTs (same `sub`/`iat`), violating the unique `tokenHash` constraint. Added a unique `jti` (UUID) claim to every refresh token.
 

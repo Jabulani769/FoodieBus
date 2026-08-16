@@ -21,13 +21,16 @@ async function bootstrapSuperAdmin(): Promise<void> {
     return;
   }
 
-  await createUser({
-    email,
-    phone,
-    password,
-    fullName,
-    role: 'SUPER_ADMIN',
-  });
+  await createUser(
+    {
+      email,
+      phone,
+      password,
+      fullName,
+      role: 'SUPER_ADMIN',
+    },
+    'SUPER_ADMIN',
+  );
   console.log(`Super admin created: ${email}`);
 }
 

@@ -27,6 +27,22 @@ function refreshExpiry(): Date {
   return new Date(Date.now() + REFRESH_TTL_MS);
 }
 
+const ROLE_HIERARCHY: Record<Role, Role[]> = {
+  SUPER_ADMIN: ['SUPER_ADMIN', 'ADMIN', 'FINANCIAL', 'VENDOR', 'OPERATOR', 'DRIVER', 'STUDENT'],
+  ADMIN: ['FINANCIAL', 'VENDOR', 'OPERATOR', 'DRIVER', 'STUDENT'],
+  FINANCIAL: ['FINANCIAL'],
+  VENDOR: ['VENDOR'],
+  OPERATOR: ['OPERATOR', 'DRIVER', 'STUDENT'],
+  DRIVER: ['DRIVER'],
+  STUDENT: ['STUDENT'],
+};
+
+function assertCanAssignRole(actorRole: Role, targetRole: Role): void {
+  if (!ROLE_HIERARCHY[actorRole].includes(targetRole)) {
+    throw AppError.forbidden('You cannot assign a role equal to or above your own');
+  }
+}
+
 export class AuthService {
   async login(identifier: string, password: string, ctx: AuthContext = {}): Promise<TokenPair> {
     const user = await prisma.user.findFirst({
@@ -125,7 +141,7 @@ export class AuthService {
     const user = await prisma.user.findFirst({
       where: { OR: [{ email: identifier.toLowerCase() }, { phone: identifier }] },
     });
-    if (!user) throw AppError.unauthorized('Invalid or expired code');
+    if (!user) throw AppError.unauthorized('Invalid code');
 
     await notificationService.verifyOtp(user.id, 'password_reset', code);
 
@@ -139,12 +155,16 @@ export class AuthService {
     });
   }
 
-  async createInvitedUser(input: {
-    email: string;
-    phone: string;
-    fullName: string;
-    role: Role;
-  }): Promise<{ id: string }> {
+  async createInvitedUser(
+    input: {
+      email: string;
+      phone: string;
+      fullName: string;
+      role: Role;
+    },
+    actorRole: Role,
+  ): Promise<{ id: string }> {
+    assertCanAssignRole(actorRole, input.role);
     const existing = await prisma.user.findFirst({
       where: {
         OR: [{ email: input.email.toLowerCase() }, { phone: input.phone }],
@@ -220,13 +240,17 @@ export class AuthService {
 
 export const authService = new AuthService();
 
-export async function createUser(input: {
-  email: string;
-  phone: string;
-  password: string;
-  fullName: string;
-  role: Role;
-}): Promise<{ id: string }> {
+export async function createUser(
+  input: {
+    email: string;
+    phone: string;
+    password: string;
+    fullName: string;
+    role: Role;
+  },
+  actorRole: Role,
+): Promise<{ id: string }> {
+  assertCanAssignRole(actorRole, input.role);
   const passwordHash = await hashPassword(input.password);
   const user = await prisma.user.create({
     data: {

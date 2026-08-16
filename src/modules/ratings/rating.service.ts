@@ -125,11 +125,16 @@ export class RatingService {
   ): Promise<void> {
     if (entityType === 'TRIP') {
       const booking = await prisma.booking.findFirst({
-        where: { passengerId: userId, tripId: entityId, status: 'CONFIRMED' },
+        where: {
+          passengerId: userId,
+          tripId: entityId,
+          status: 'CONFIRMED',
+          trip: { status: 'COMPLETED' },
+        },
         select: { id: true },
       });
       if (!booking) {
-        throw AppError.forbidden('You can only rate trips you have a confirmed booking on');
+        throw AppError.forbidden('You can only rate trips you have completed');
       }
       return;
     }
@@ -139,7 +144,7 @@ export class RatingService {
         where: {
           passengerId: userId,
           status: 'CONFIRMED',
-          trip: { operatorId: entityId },
+          trip: { operatorId: entityId, status: 'COMPLETED' },
         },
         select: { id: true },
       });

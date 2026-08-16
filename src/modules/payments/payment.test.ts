@@ -67,14 +67,17 @@ describe('payments module', () => {
   async function createTestUser(overrides: Partial<Parameters<typeof createUser>[0]> = {}) {
     const email = `user-${Math.random().toString(36).slice(2)}@foodiebus.mw`;
     const phone = `+26599${String(Math.floor(1000000 + Math.random() * 9000000))}`;
-    const user = await createUser({
-      email,
-      phone,
-      password: 'password123',
-      fullName: 'Test User',
-      role: 'STUDENT',
-      ...overrides,
-    });
+    const user = await createUser(
+      {
+        email,
+        phone,
+        password: 'password123',
+        fullName: 'Test User',
+        role: 'STUDENT',
+        ...overrides,
+      },
+      'SUPER_ADMIN',
+    );
     return { ...user, email, phone };
   }
 
@@ -383,6 +386,7 @@ describe('payments module', () => {
       });
 
       const { expireStalePayments } = await import('../../jobs/workers/payment-expiry.worker.js');
+      mockedVerify.mockResolvedValue({ status: 'failed', amount: 18000, currency: 'MWK' });
       const expired = await expireStalePayments();
       expect(expired).toBe(1);
 
@@ -419,11 +423,38 @@ describe('payments module', () => {
       });
 
       const { expireStalePayments } = await import('../../jobs/workers/payment-expiry.worker.js');
+      mockedVerify.mockResolvedValue({ status: 'failed', amount: 18000, currency: 'MWK' });
       const expired = await expireStalePayments();
       expect(expired).toBe(1);
 
       const payment = await prisma.payment.findUnique({ where: { id: paymentId } });
       expect(payment?.status).toBe('FAILED');
+      const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
+      expect(booking?.status).toBe('CONFIRMED');
+    });
+
+    it('confirms a stale PENDING payment when the gateway reports success', async () => {
+      const student = await createStudentUser();
+      const { bookingId } = await createBookingFor(student);
+      const init = await app.inject({
+        method: 'POST',
+        url: '/api/v1/payments',
+        headers: { authorization: `Bearer ${student.accessToken}` },
+        payload: { bookingId },
+      });
+      const paymentId = init.json().id as string;
+      await prisma.payment.update({
+        where: { id: paymentId },
+        data: { createdAt: new Date(Date.now() - 60 * 60 * 1000) },
+      });
+      mockedVerify.mockResolvedValue({ status: 'success', amount: 18000, currency: 'MWK' });
+
+      const { expireStalePayments } = await import('../../jobs/workers/payment-expiry.worker.js');
+      const expired = await expireStalePayments();
+      expect(expired).toBe(0);
+
+      const payment = await prisma.payment.findUnique({ where: { id: paymentId } });
+      expect(payment?.status).toBe('PAID');
       const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
       expect(booking?.status).toBe('CONFIRMED');
     });

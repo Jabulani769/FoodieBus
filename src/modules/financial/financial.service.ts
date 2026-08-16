@@ -22,7 +22,10 @@ export interface PaginatedResult<T> {
 const COMMISSION_SETTING_KEY = 'commission_rate';
 
 function csvEscape(value: unknown): string {
-  const str = value === null || value === undefined ? '' : String(value);
+  let str = value === null || value === undefined ? '' : String(value);
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = `'${str}`;
+  }
   if (/[",\n\r]/.test(str)) {
     return `"${str.replace(/"/g, '""')}"`;
   }
@@ -50,8 +53,12 @@ export class FinancialService {
       );
     }
 
-    const alreadyRefunded = payment.refunds.some((r) => r.status === 'PROCESSED');
-    if (alreadyRefunded) throw AppError.conflict('This payment has already been refunded');
+    const refundedAmount = payment.refunds
+      .filter((r) => r.status === 'PROCESSED')
+      .reduce((sum, r) => sum + Number(r.amount), 0);
+    if (refundedAmount >= Number(payment.amount)) {
+      throw AppError.conflict('This payment has already been fully refunded');
+    }
 
     const pendingRefund = payment.refunds.some(
       (r) => r.status === 'REQUESTED' || r.status === 'APPROVED',
@@ -59,9 +66,6 @@ export class FinancialService {
     if (pendingRefund)
       throw AppError.conflict('A refund request is already pending for this payment');
 
-    const refundedAmount = payment.refunds
-      .filter((r) => r.status === 'PROCESSED')
-      .reduce((sum, r) => sum + Number(r.amount), 0);
     const refundable = Number(payment.amount) - refundedAmount;
     if (amount > refundable) {
       throw AppError.conflict(
@@ -69,9 +73,17 @@ export class FinancialService {
       );
     }
 
-    const refund = await prisma.refund.create({
-      data: { paymentId, amount, reason, requestedById },
-    });
+    let refund;
+    try {
+      refund = await prisma.refund.create({
+        data: { paymentId, amount, reason, requestedById },
+      });
+    } catch (err) {
+      if (this.isUniqueViolation(err)) {
+        throw AppError.conflict('A refund request is already pending for this payment');
+      }
+      throw err;
+    }
 
     await writeAuditLog({
       actorId: requestedById,
@@ -179,8 +191,17 @@ export class FinancialService {
       include: { payment: true },
     });
     if (!refund) throw AppError.notFound('Refund not found');
-    if (refund.status !== 'APPROVED') {
-      throw AppError.conflict(`Only approved refunds can be processed (current: ${refund.status})`);
+
+    // Atomically claim the APPROVED -> PROCESSED transition. Only one concurrent
+    // request can win; duplicates are rejected before any money moves.
+    const claimed = await prisma.refund.updateMany({
+      where: { id: refundId, status: 'APPROVED' },
+      data: { status: 'PROCESSED', processedAt: new Date() },
+    });
+    if (claimed.count !== 1) {
+      throw AppError.conflict(
+        'Refund is not in a processable (APPROVED) state or is already being processed',
+      );
     }
 
     try {
@@ -190,22 +211,19 @@ export class FinancialService {
         reason: refund.reason,
       });
 
-      await prisma.$transaction(async (tx) => {
-        await tx.refund.update({
-          where: { id: refundId },
-          data: {
-            status: 'PROCESSED',
-            processedAt: new Date(),
-            paychanguRefundId: result.refundId,
-          },
-        });
-        await tx.payment.update({
+      await prisma.refund.update({
+        where: { id: refundId },
+        data: { paychanguRefundId: result.refundId },
+      });
+
+      const isFullRefund = Number(refund.amount) >= Number(refund.payment.amount);
+      if (isFullRefund) {
+        await prisma.payment.update({
           where: { id: refund.paymentId },
           data: { status: 'REFUNDED' },
         });
-      });
-
-      await busService.forceCancelBooking(refund.payment.bookingId);
+        await busService.forceCancelBooking(refund.payment.bookingId);
+      }
 
       const booking = await prisma.booking.findUnique({
         where: { id: refund.payment.bookingId },
@@ -774,6 +792,10 @@ export class FinancialService {
     const first = new Date(Date.UTC(year, month - 1, 1));
     const next = new Date(Date.UTC(year, month, 1));
     return [first, next];
+  }
+
+  private isUniqueViolation(err: unknown): boolean {
+    return err instanceof Error && 'code' in err && (err as { code?: string }).code === 'P2002';
   }
 }
 

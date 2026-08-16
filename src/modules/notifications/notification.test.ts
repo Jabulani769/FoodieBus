@@ -50,14 +50,17 @@ describe('notifications module', () => {
   async function createTestUser(overrides: Partial<Parameters<typeof createUser>[0]> = {}) {
     const email = `user-${Math.random().toString(36).slice(2)}@foodiebus.mw`;
     const phone = `+26599${String(Math.floor(1000000 + Math.random() * 9000000))}`;
-    const user = await createUser({
-      email,
-      phone,
-      password: 'password123',
-      fullName: 'Test User',
-      role: 'STUDENT',
-      ...overrides,
-    });
+    const user = await createUser(
+      {
+        email,
+        phone,
+        password: 'password123',
+        fullName: 'Test User',
+        role: 'STUDENT',
+        ...overrides,
+      },
+      'SUPER_ADMIN',
+    );
     return { ...user, email, phone };
   }
 
@@ -292,13 +295,16 @@ describe('notifications module', () => {
     });
 
     it('POST /auth/verify-invite activates the user and sets the password', async () => {
-      const invited = await createUser({
-        email: `inv-${Math.random().toString(36).slice(2)}@foodiebus.mw`,
-        phone: '+265990000333',
-        password: 'temp-pass-1',
-        fullName: 'Invitee',
-        role: 'STUDENT',
-      });
+      const invited = await createUser(
+        {
+          email: `inv-${Math.random().toString(36).slice(2)}@foodiebus.mw`,
+          phone: '+265990000333',
+          password: 'temp-pass-1',
+          fullName: 'Invitee',
+          role: 'STUDENT',
+        },
+        'SUPER_ADMIN',
+      );
       await prisma.user.update({ where: { id: invited.id }, data: { isActive: false } });
       await futureOtp(invited.id, '654321', 'invite');
       const userRecord = await prisma.user.findUnique({ where: { id: invited.id } });

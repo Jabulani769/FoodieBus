@@ -45,14 +45,17 @@ describe('ratings module', () => {
   async function createTestUser(overrides: Partial<Parameters<typeof createUser>[0]> = {}) {
     const email = `user-${Math.random().toString(36).slice(2)}@foodiebus.mw`;
     const phone = `+26599${String(Math.floor(1000000 + Math.random() * 9000000))}`;
-    const user = await createUser({
-      email,
-      phone,
-      password: 'password123',
-      fullName: 'Test User',
-      role: 'STUDENT',
-      ...overrides,
-    });
+    const user = await createUser(
+      {
+        email,
+        phone,
+        password: 'password123',
+        fullName: 'Test User',
+        role: 'STUDENT',
+        ...overrides,
+      },
+      'SUPER_ADMIN',
+    );
     return { ...user, email, phone };
   }
 
@@ -128,8 +131,12 @@ describe('ratings module', () => {
       passengerPhone: '+265991000000',
     });
     await busService.confirmBooking(booking.id);
+    await prisma.trip.update({
+      where: { id: trip!.id },
+      data: { status: 'COMPLETED' },
+    });
     return {
-      trip: trip!,
+      trip: (await prisma.trip.findUnique({ where: { id: trip!.id } }))!,
       booking: (await prisma.booking.findUnique({ where: { id: booking.id } }))!,
     };
   }
@@ -236,6 +243,21 @@ describe('ratings module', () => {
       const student = await createStudentUser();
       const operator = await createOperatorUser();
       const trip = await createTripForOperator(operator.operatorProfile!.id);
+
+      const res = await rate(student.accessToken, 'TRIP', trip!.id, 5);
+      expect(res.statusCode).toBe(403);
+    });
+
+    it('rejects rating a confirmed but not completed trip', async () => {
+      const student = await createStudentUser();
+      const operator = await createOperatorUser();
+      const trip = await createTripForOperator(operator.operatorProfile!.id);
+      const seat = await prisma.seatInventory.findFirst({ where: { tripId: trip!.id } });
+      const booking = await busService.createBooking(trip!.id, seat!.seatNumber, student.user.id, {
+        passengerName: 'Passenger One',
+        passengerPhone: '+265991000000',
+      });
+      await busService.confirmBooking(booking.id);
 
       const res = await rate(student.accessToken, 'TRIP', trip!.id, 5);
       expect(res.statusCode).toBe(403);
@@ -402,6 +424,10 @@ describe('ratings module', () => {
         },
       );
       await busService.confirmBooking(bookingB.id);
+      await prisma.trip.update({
+        where: { id: trip!.id },
+        data: { status: 'COMPLETED' },
+      });
 
       await rate(studentA.accessToken, 'TRIP', trip!.id, 5);
       await rate(studentB.accessToken, 'TRIP', trip!.id, 3);

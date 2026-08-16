@@ -937,7 +937,7 @@ export async function registerBusRoutes(app: FastifyInstance): Promise<void> {
       const actor = requireUser(request);
       const operatorId = await requireOperatorId(actor.id);
       const parsed = createDriverSchema.parse(request);
-      const driver = await busService.createDriver(parsed.body, operatorId);
+      const driver = await busService.createDriver(parsed.body, operatorId, actor.role);
       await writeAuditLog({
         actorId: actor.id,
         action: 'driver.create',
@@ -1067,8 +1067,9 @@ export async function registerBusRoutes(app: FastifyInstance): Promise<void> {
       },
     },
     async (request: FastifyRequest, reply) => {
+      const actor = requireUser(request);
       const { id } = tripParamsSchema.parse(request).params;
-      return reply.send(await busService.getManifest(id));
+      return reply.send(await busService.getManifest(id, actor.id));
     },
   );
 

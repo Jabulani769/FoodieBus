@@ -426,12 +426,12 @@ export class BusService {
   }
 
   private async cancelTripBookings(tripId: string): Promise<void> {
-    await prisma.$transaction(async (tx) => {
-      const bookings = await tx.booking.findMany({
+    const bookings = await prisma.$transaction(async (tx) => {
+      const bookingRows = await tx.booking.findMany({
         where: { tripId, status: { in: ['PENDING', 'CONFIRMED'] } },
-        select: { id: true, seatId: true, status: true },
+        select: { id: true, seatId: true, status: true, passengerId: true },
       });
-      for (const booking of bookings) {
+      for (const booking of bookingRows) {
         await tx.booking.update({
           where: { id: booking.id },
           data: { status: 'CANCELLED' },
@@ -441,6 +441,65 @@ export class BusService {
           data: { status: 'AVAILABLE' },
         });
       }
+      return bookingRows;
+    });
+
+    for (const booking of bookings) {
+      if (booking.status !== 'CONFIRMED') continue;
+      const paid = await prisma.payment.findFirst({
+        where: { bookingId: booking.id, status: 'PAID' },
+        select: { id: true, amount: true },
+      });
+      if (!paid) continue;
+
+      const pending = await prisma.refund.findFirst({
+        where: { paymentId: paid.id, status: { in: ['REQUESTED', 'APPROVED'] } },
+        select: { id: true },
+      });
+      if (pending) continue;
+
+      try {
+        await prisma.refund.create({
+          data: {
+            paymentId: paid.id,
+            amount: Number(paid.amount),
+            reason: 'Auto-refund: trip was cancelled by the operator',
+            requestedById: booking.passengerId,
+          },
+        });
+      } catch (err) {
+        if (this.isUniqueViolation(err)) continue;
+        throw err;
+      }
+
+      await notificationService.notifyUser(
+        booking.passengerId,
+        'Refund requested',
+        'Your trip was cancelled. A refund for your paid booking has been requested and will be processed shortly.',
+        { reference: booking.id, referenceType: 'booking' },
+      );
+    }
+
+    for (const booking of bookings) {
+      await this.invalidateBookingRatings(booking.id);
+    }
+  }
+
+  private async invalidateBookingRatings(bookingId: string): Promise<void> {
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      select: { passengerId: true, trip: { select: { id: true, operatorId: true } } },
+    });
+    if (!booking) return;
+
+    await prisma.rating.deleteMany({
+      where: {
+        userId: booking.passengerId,
+        OR: [
+          { entityType: 'TRIP', entityId: booking.trip.id },
+          { entityType: 'OPERATOR', entityId: booking.trip.operatorId },
+        ],
+      },
     });
   }
 
@@ -503,15 +562,23 @@ export class BusService {
     return { id: bookingId, checkedInAt: new Date(), passengerName: booking.passengerName };
   }
 
-  async getManifest(tripId: string): Promise<unknown> {
+  async getManifest(tripId: string, actorId: string): Promise<unknown> {
     const trip = await prisma.trip.findUnique({
       where: { id: tripId },
       include: {
         route: { select: { fromCity: true, toCity: true } },
-        driver: { select: { id: true, user: { select: { fullName: true } } } },
+        driver: { select: { id: true, userId: true, user: { select: { fullName: true } } } },
       },
     });
     if (!trip) throw AppError.notFound('Trip not found');
+
+    const isAssignedDriver = trip.driver?.userId === actorId;
+    const isOperator = await prisma.trip.findFirst({
+      where: { id: tripId, operator: { userId: actorId } },
+    });
+    if (!isAssignedDriver && !isOperator) {
+      throw AppError.forbidden('Only the trip operator or assigned driver can view the manifest');
+    }
 
     const bookings = await prisma.booking.findMany({
       where: { tripId },
@@ -599,14 +666,18 @@ export class BusService {
   async createDriver(
     data: CreateDriverInput,
     operatorId: string,
+    actorRole: Role,
   ): Promise<{ id: string; userId: string }> {
-    const { id: userId } = await createUser({
-      email: data.email,
-      phone: data.phone,
-      password: data.password,
-      fullName: data.fullName,
-      role: 'DRIVER',
-    });
+    const { id: userId } = await createUser(
+      {
+        email: data.email,
+        phone: data.phone,
+        password: data.password,
+        fullName: data.fullName,
+        role: 'DRIVER',
+      },
+      actorRole,
+    );
 
     const driver = await prisma.driverProfile.create({
       data: {
@@ -789,6 +860,16 @@ export class BusService {
         throw AppError.conflict('Booking has already been cancelled or expired');
       }
 
+      const paid = await tx.payment.findFirst({
+        where: { bookingId, status: 'PAID' },
+        select: { id: true },
+      });
+      if (paid) {
+        throw AppError.conflict(
+          'This booking has been paid. To cancel it, please request a refund.',
+        );
+      }
+
       await tx.booking.update({
         where: { id: bookingId },
         data: { status: 'CANCELLED' },
@@ -800,6 +881,8 @@ export class BusService {
 
       return booking.passengerId;
     });
+
+    await this.invalidateBookingRatings(bookingId);
 
     await notificationService.notifyUser(
       passengerId,
@@ -814,14 +897,14 @@ export class BusService {
   // Used by the Notifications expiry worker to release a booking whose payment was never completed.
   async expireBooking(bookingId: string): Promise<void> {
     await prisma.$transaction(async (tx) => {
-      const booking = await tx.booking.findUnique({ where: { id: bookingId } });
-      if (!booking) return; // already gone — treat as idempotent
-      if (booking.status !== 'PENDING') return; // only expire pending bookings
-
-      await tx.booking.update({
-        where: { id: bookingId },
+      const result = await tx.booking.updateMany({
+        where: { id: bookingId, status: 'PENDING' },
         data: { status: 'EXPIRED' as BookingStatus },
       });
+      if (result.count === 0) return; // not pending — idempotent
+
+      const booking = await tx.booking.findUnique({ where: { id: bookingId } });
+      if (!booking) return;
       await tx.seatInventory.update({
         where: { id: booking.seatId },
         data: { status: 'AVAILABLE' },
@@ -832,16 +915,18 @@ export class BusService {
   // Used by the Payments module to confirm a booking after a successful webhook.
   async confirmBooking(bookingId: string): Promise<void> {
     await prisma.$transaction(async (tx) => {
-      const booking = await tx.booking.findUnique({ where: { id: bookingId } });
-      if (!booking) throw AppError.notFound('Booking not found');
-      if (booking.status !== 'PENDING') {
+      const result = await tx.booking.updateMany({
+        where: { id: bookingId, status: 'PENDING' },
+        data: { status: 'CONFIRMED' as BookingStatus },
+      });
+      if (result.count === 0) {
+        const booking = await tx.booking.findUnique({ where: { id: bookingId } });
+        if (!booking) throw AppError.notFound('Booking not found');
         throw AppError.conflict(`Booking is already ${booking.status.toLowerCase()}`);
       }
 
-      await tx.booking.update({
-        where: { id: bookingId },
-        data: { status: 'CONFIRMED' as BookingStatus },
-      });
+      const booking = await tx.booking.findUnique({ where: { id: bookingId } });
+      if (!booking) throw AppError.notFound('Booking not found');
       await tx.seatInventory.update({
         where: { id: booking.seatId },
         data: { status: 'BOOKED' },

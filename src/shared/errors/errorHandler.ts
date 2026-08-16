@@ -32,6 +32,16 @@ export function errorHandler(
     return;
   }
 
+  if (typeof error.statusCode === 'number' && error.statusCode < 500) {
+    reply.status(error.statusCode).send({
+      error: {
+        code: (error as FastifyError & { code?: string }).code ?? 'REQUEST_ERROR',
+        message: error.message,
+      },
+    });
+    return;
+  }
+
   request.log.error({ err: error }, 'unhandled error');
   captureException(error);
   reply.status(500).send({

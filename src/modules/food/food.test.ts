@@ -43,14 +43,17 @@ describe('food module', () => {
   async function createTestUser(overrides: Partial<Parameters<typeof createUser>[0]> = {}) {
     const email = `user-${Math.random().toString(36).slice(2)}@foodiebus.mw`;
     const phone = `+26599${String(Math.floor(1000000 + Math.random() * 9000000))}`;
-    const user = await createUser({
-      email,
-      phone,
-      password: 'password123',
-      fullName: 'Test User',
-      role: 'STUDENT',
-      ...overrides,
-    });
+    const user = await createUser(
+      {
+        email,
+        phone,
+        password: 'password123',
+        fullName: 'Test User',
+        role: 'STUDENT',
+        ...overrides,
+      },
+      'SUPER_ADMIN',
+    );
     return { ...user, email, phone };
   }
 

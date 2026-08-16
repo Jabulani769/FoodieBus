@@ -12,6 +12,7 @@ export default tseslint.config(
       '*.config.*',
       'apps/',
       'packages/',
+      'ops/',
     ],
   },
   eslint.configs.recommended,

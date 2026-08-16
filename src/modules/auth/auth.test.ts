@@ -42,14 +42,17 @@ describe('auth module', () => {
   });
 
   async function createTestUser(overrides: Partial<Parameters<typeof createUser>[0]> = {}) {
-    return createUser({
-      email: 'student@foodiebus.mw',
-      phone: '+265991234567',
-      password: 'password123',
-      fullName: 'Test Student',
-      role: 'STUDENT',
-      ...overrides,
-    });
+    return createUser(
+      {
+        email: 'student@foodiebus.mw',
+        phone: '+265991234567',
+        password: 'password123',
+        fullName: 'Test Student',
+        role: 'STUDENT',
+        ...overrides,
+      },
+      'SUPER_ADMIN',
+    );
   }
 
   async function loginAs(email: string, password: string) {

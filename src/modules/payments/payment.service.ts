@@ -92,7 +92,10 @@ export class PaymentService {
         await busService.confirmBooking(payment.bookingId);
       } catch (err) {
         if (err instanceof AppError && (err.code === 'CONFLICT' || err.code === 'NOT_FOUND')) {
-          // Booking already confirmed/cancelled by another attempt — payment is still recorded.
+          // The booking was already cancelled/expired before the payment confirmed.
+          // The customer has been charged but holds no seat — auto-request a refund
+          // so the money can be returned through the normal financial flow.
+          await this.autoRefundForLostBooking(payment.id, payment.bookingId);
         } else {
           throw err;
         }
@@ -224,6 +227,51 @@ export class PaymentService {
       charges: payment.charges ? Number(payment.charges) : null,
     });
     return { buffer, filename: `receipt-${payment.txRef}.pdf` };
+  }
+
+  // Called when a webhook confirms a payment but the booking can no longer be
+  // confirmed (it was cancelled or expired before payment landed). Creates a
+  // REQUESTED refund so the charged amount can be returned via the financial flow.
+  private async autoRefundForLostBooking(paymentId: string, bookingId: string): Promise<void> {
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      select: { passengerId: true, status: true },
+    });
+    if (!booking) return;
+    if (booking.status === 'CONFIRMED') return; // not actually lost
+
+    const existing = await prisma.refund.findFirst({
+      where: {
+        paymentId,
+        status: { in: ['REQUESTED', 'APPROVED', 'PROCESSED'] },
+      },
+      select: { id: true },
+    });
+    if (existing) return; // refund already requested
+
+    await prisma.refund.create({
+      data: {
+        paymentId,
+        amount: await this.paymentAmount(paymentId),
+        reason: 'Auto-refund: paid for a booking that was cancelled or expired before confirmation',
+        requestedById: booking.passengerId,
+      },
+    });
+
+    await notificationService.notifyUser(
+      booking.passengerId,
+      'Refund requested',
+      'A payment was received for a booking that is no longer valid. A refund has been requested and will be processed shortly.',
+      { reference: paymentId, referenceType: 'payment' },
+    );
+  }
+
+  private async paymentAmount(paymentId: string): Promise<number> {
+    const payment = await prisma.payment.findUnique({
+      where: { id: paymentId },
+      select: { amount: true },
+    });
+    return payment ? Number(payment.amount) : 0;
   }
 }
 

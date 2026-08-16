@@ -33,6 +33,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   app.post(
     '/auth/login',
     {
+      config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
       schema: {
         tags: ['auth'],
         summary: 'Login with email or phone + password',
@@ -70,6 +71,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   app.post(
     '/auth/refresh',
     {
+      config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
       schema: {
         tags: ['auth'],
         summary: 'Rotate refresh token, get a new token pair',
@@ -193,7 +195,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     async (request: FastifyRequest, reply) => {
       const actor = requireUser(request);
       const data = createUserSchema.parse({ body: request.body }).body;
-      const user = await createUser(data);
+      const user = await createUser(data, actor.role);
       await writeAuditLog({
         actorId: actor.id,
         action: 'user.create',
@@ -332,6 +334,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   app.post(
     '/auth/forgot-password',
     {
+      config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
       schema: {
         tags: ['auth'],
         summary: 'Request a password reset code (sent via SMS/email)',
@@ -353,6 +356,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   app.post(
     '/auth/reset-password',
     {
+      config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
       schema: {
         tags: ['auth'],
         summary: 'Verify the reset code and set a new password',
@@ -404,7 +408,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     async (request: FastifyRequest, reply) => {
       const actor = requireUser(request);
       const data = inviteUserSchema.parse({ body: request.body }).body;
-      const user = await authService.createInvitedUser(data);
+      const user = await authService.createInvitedUser(data, actor.role);
       await writeAuditLog({
         actorId: actor.id,
         action: 'user.invite',
@@ -420,6 +424,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   app.post(
     '/auth/verify-invite',
     {
+      config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
       schema: {
         tags: ['auth'],
         summary: 'Accept an invite by verifying the code and setting a password',

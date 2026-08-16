@@ -61,6 +61,7 @@ export async function registerPaymentRoutes(app: FastifyInstance): Promise<void>
     '/payments',
     {
       preHandler: [authenticate],
+      config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
       schema: {
         tags: ['payments'],
         summary: 'Initiate a payment for a pending booking',

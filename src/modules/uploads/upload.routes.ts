@@ -25,6 +25,7 @@ export async function registerUploadRoutes(app: FastifyInstance): Promise<void> 
   app.post(
     '/uploads',
     {
+      config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
       preHandler: [
         authenticate,
         authorize('STUDENT', 'VENDOR', 'OPERATOR', 'ADMIN', 'SUPER_ADMIN'),

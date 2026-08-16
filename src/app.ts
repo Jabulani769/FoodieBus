@@ -5,6 +5,7 @@ import swaggerUi from '@fastify/swagger-ui';
 import sensible from '@fastify/sensible';
 import multipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
+import rateLimit from '@fastify/rate-limit';
 import { resolve } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { logger } from './shared/logger/index.js';
@@ -24,14 +25,27 @@ import { registerAnalyticsRoutes } from './modules/analytics/analytics.routes.js
 import { registerDeliveryRoutes } from './modules/delivery/delivery.routes.js';
 import { registerUploadRoutes } from './modules/uploads/upload.routes.js';
 import { registerRatingRoutes } from './modules/ratings/rating.routes.js';
+import { registerMetricsRoutes } from './modules/metrics/metrics.routes.js';
+import { initMetricsHooks } from './shared/metrics/index.js';
 
-export async function buildApp(options: FastifyServerOptions = {}) {
+export async function buildApp(
+  options: FastifyServerOptions = {},
+  runtime: { rateLimitEnabled?: boolean } = {},
+) {
+  const rateLimitEnabled = runtime.rateLimitEnabled ?? env.RATE_LIMIT_ENABLED === 'true';
   const app = Fastify({
     loggerInstance: options.loggerInstance ?? logger,
+    genReqId: (req) => {
+      const incoming = req.headers['x-request-id'];
+      if (typeof incoming === 'string' && incoming.length > 0) return incoming;
+      return crypto.randomUUID();
+    },
     ...options,
   });
 
   app.setErrorHandler(errorHandler);
+
+  initMetricsHooks(app);
 
   await app.register(cors, {
     origin: true,
@@ -39,6 +53,22 @@ export async function buildApp(options: FastifyServerOptions = {}) {
   });
 
   await app.register(sensible);
+
+  if (rateLimitEnabled) {
+    await app.register(rateLimit, {
+      max: 300,
+      timeWindow: '1 minute',
+      global: true,
+      errorResponseBuilder: (_req, context) => {
+        const err = new Error(
+          `Too many requests. Please retry after ${context.after}.`,
+        ) as Error & { statusCode?: number; code?: string };
+        err.statusCode = context.statusCode;
+        err.code = 'RATE_LIMITED';
+        return err;
+      },
+    });
+  }
 
   await app.register(multipart, {
     limits: { fileSize: env.STORAGE_MAX_SIZE_MB * 1024 * 1024 * 10 },
@@ -93,6 +123,7 @@ export async function buildApp(options: FastifyServerOptions = {}) {
   await app.register(registerDeliveryRoutes, { prefix: '/api/v1' });
   await app.register(registerUploadRoutes, { prefix: '/api/v1' });
   await app.register(registerRatingRoutes, { prefix: '/api/v1' });
+  await app.register(registerMetricsRoutes);
 
   return app;
 }
