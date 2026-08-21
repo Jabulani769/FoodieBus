@@ -28,7 +28,7 @@ COPY prisma ./prisma
 COPY prisma.config.ts ./
 
 # prisma is a devDependency, so install the CLI explicitly for migrate deploy on boot.
-RUN HUSKY=0 npm ci --omit=dev && npm install --no-save prisma@7.9.1
+RUN npm ci --omit=dev && npm install --no-save prisma@7.9.1
 
 COPY --from=builder /app/dist ./dist
 

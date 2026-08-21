@@ -33,7 +33,7 @@
     "db:reset": "prisma migrate reset",
     "db:test:setup": "tsx scripts/setup-test-db.ts",
     "bootstrap:super-admin": "tsx scripts/bootstrap-super-admin.ts",
-    "prepare": "husky",
+    "prepare": "husky || true",
     "dev:vendor": "npm run dev --workspace=@foodiebus/web-vendor",
     "dev:admin": "npm run dev --workspace=@foodiebus/web-admin",
     "dev:financial": "npm run dev --workspace=@foodiebus/web-financial",
