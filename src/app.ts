@@ -25,7 +25,10 @@ import { registerAnalyticsRoutes } from './modules/analytics/analytics.routes.js
 import { registerDeliveryRoutes } from './modules/delivery/delivery.routes.js';
 import { registerUploadRoutes } from './modules/uploads/upload.routes.js';
 import { registerRatingRoutes } from './modules/ratings/rating.routes.js';
+import { registerCouponRoutes } from './modules/coupons/coupon.routes.js';
+import { registerFavoriteRoutes } from './modules/favorites/favorite.routes.js';
 import { registerMetricsRoutes } from './modules/metrics/metrics.routes.js';
+import { registerEasyPayRoutes } from './modules/easypay/easypay.routes.js';
 import { initMetricsHooks } from './shared/metrics/index.js';
 
 export async function buildApp(
@@ -123,7 +126,12 @@ export async function buildApp(
   await app.register(registerDeliveryRoutes, { prefix: '/api/v1' });
   await app.register(registerUploadRoutes, { prefix: '/api/v1' });
   await app.register(registerRatingRoutes, { prefix: '/api/v1' });
+  await app.register(registerCouponRoutes, { prefix: '/api/v1' });
+  await app.register(registerFavoriteRoutes, { prefix: '/api/v1' });
   await app.register(registerMetricsRoutes);
+
+  // Easy Pay mobile contract adapter (root paths, snake_case) — see gap analysis.
+  await app.register(registerEasyPayRoutes);
 
   return app;
 }

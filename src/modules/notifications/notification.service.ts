@@ -9,8 +9,9 @@ import type { NotificationChannel, NotificationStatus } from '../../generated/pr
 
 export const OTP_PURPOSE_PASSWORD_RESET = 'password_reset';
 export const OTP_PURPOSE_INVITE = 'invite';
+export const OTP_PURPOSE_LOGIN = 'login';
 
-export type OtpPurpose = 'password_reset' | 'invite';
+export type OtpPurpose = 'password_reset' | 'invite' | 'login';
 
 interface SendOptions {
   reference?: string;
@@ -81,6 +82,9 @@ export class NotificationService {
       if (pref.whatsapp) channels.push('WHATSAPP');
       if (pref.email) channels.push('EMAIL');
 
+      const hasDevice = (await prisma.deviceToken.count({ where: { userId, isActive: true } })) > 0;
+      if (hasDevice) channels.push('PUSH');
+
       for (const channel of channels) {
         await this.send(userId, channel, subject, body, opts);
       }
@@ -104,7 +108,9 @@ export class NotificationService {
     const message =
       purpose === OTP_PURPOSE_INVITE
         ? `Welcome to FoodieBus! Your verification code is ${code}. It expires in ${env.OTP_TTL_MINUTES} minutes.`
-        : `Your FoodieBus password reset code is ${code}. It expires in ${env.OTP_TTL_MINUTES} minutes.`;
+        : purpose === OTP_PURPOSE_LOGIN
+          ? `Your FoodieBus login code is ${code}. It expires in ${env.OTP_TTL_MINUTES} minutes.`
+          : `Your FoodieBus password reset code is ${code}. It expires in ${env.OTP_TTL_MINUTES} minutes.`;
 
     // Critical flows (password reset / invite) always go out on SMS + email.
     for (const channel of ['SMS', 'EMAIL'] as const) {
@@ -202,6 +208,39 @@ export class NotificationService {
       update: next,
     });
     return next;
+  }
+
+  // ---- Push device tokens ----
+
+  async registerDeviceToken(
+    userId: string,
+    token: string,
+    platform: 'ANDROID' | 'IOS',
+  ): Promise<{ id: string }> {
+    const device = await prisma.deviceToken.upsert({
+      where: { userId_token: { userId, token } },
+      create: { userId, token, platform },
+      update: { platform, isActive: true },
+      select: { id: true },
+    });
+    return device;
+  }
+
+  async listDeviceTokens(userId: string): Promise<{ items: unknown[] }> {
+    const items = await prisma.deviceToken.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+    });
+    return { items };
+  }
+
+  async removeDeviceToken(deviceId: string, userId: string): Promise<void> {
+    const device = await prisma.deviceToken.findUnique({ where: { id: deviceId } });
+    if (!device) throw AppError.notFound('Device token not found');
+    if (device.userId !== userId) {
+      throw AppError.forbidden('You can only remove your own device tokens');
+    }
+    await prisma.deviceToken.delete({ where: { id: deviceId } });
   }
 }
 

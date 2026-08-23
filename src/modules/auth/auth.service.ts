@@ -5,7 +5,7 @@ import { signAccessToken, signRefreshToken } from './jwt.js';
 import { writeAuditLog } from '../../shared/audit/audit.js';
 import { createHash, randomBytes } from 'node:crypto';
 import type { Role } from '../../generated/prisma/enums.js';
-import { notificationService } from '../notifications/notification.service.js';
+import { notificationService, OTP_PURPOSE_LOGIN } from '../notifications/notification.service.js';
 
 export interface TokenPair {
   accessToken: string;
@@ -212,6 +212,54 @@ export class AuthService {
     });
   }
 
+  // ---- Phone-OTP login (Easy Pay / mobile contract) ----
+  // The mobile app authenticates by SMS OTP only (no password). We find-or-create
+  // a STUDENT user keyed by phone, then issue a standard JWT on successful OTP.
+
+  async requestLoginOtp(phone: string): Promise<void> {
+    const normalized = phone.trim();
+    let user = await prisma.user.findFirst({ where: { phone: normalized } });
+    if (!user) {
+      // First-time mobile user: provision a STUDENT account (phone-only).
+      user = await prisma.user.create({
+        data: {
+          email: `${normalized}@easypay.local`,
+          phone: normalized,
+          passwordHash: await hashPassword(randomBytes(18).toString('base64')),
+          fullName: normalized,
+          role: 'STUDENT',
+        },
+      });
+    }
+    if (!user.isActive || user.deletedAt !== null) {
+      throw AppError.unauthorized('Account is not active');
+    }
+    await notificationService.sendOtp(user.id, OTP_PURPOSE_LOGIN);
+  }
+
+  async verifyLoginOtp(
+    phone: string,
+    code: string,
+  ): Promise<{ token: string; user: Record<string, unknown> }> {
+    const normalized = phone.trim();
+    const user = await prisma.user.findFirst({ where: { phone: normalized } });
+    if (!user) throw AppError.unauthorized('Invalid code');
+
+    await notificationService.verifyOtp(user.id, OTP_PURPOSE_LOGIN, code);
+
+    const { accessToken } = await this.issueTokens(user, {});
+    return {
+      token: accessToken,
+      user: {
+        id: user.id,
+        name: user.fullName,
+        email: user.email,
+        phone: user.phone,
+        profile_image: null,
+      },
+    };
+  }
+
   private async issueTokens(
     user: { id: string; role: Role; email: string; phone: string },
     ctx: AuthContext,
@@ -251,6 +299,14 @@ export async function createUser(
   actorRole: Role,
 ): Promise<{ id: string }> {
   assertCanAssignRole(actorRole, input.role);
+  const existing = await prisma.user.findFirst({
+    where: {
+      OR: [{ email: input.email.toLowerCase() }, { phone: input.phone }],
+    },
+    select: { id: true },
+  });
+  if (existing) throw AppError.conflict('A user with this email or phone already exists');
+
   const passwordHash = await hashPassword(input.password);
   const user = await prisma.user.create({
     data: {
