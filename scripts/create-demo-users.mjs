@@ -14,11 +14,41 @@ const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? 'admin@foodiebus.mw';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? 'superadmin_dev_pass_123';
 
 const USERS = [
-  { email: 'operator@foodiebus.mw', phone: '+265991111001', password: 'operator123', fullName: 'Northern Coaches', role: 'OPERATOR' },
-  { email: 'vendor@foodiebus.mw', phone: '+265991111002', password: 'vendor123', fullName: 'Chimwemwe Kitchen', role: 'VENDOR' },
-  { email: 'financial@foodiebus.mw', phone: '+265991111003', password: 'financial123', fullName: 'Finance Team', role: 'FINANCIAL' },
-  { email: 'admin2@foodiebus.mw', phone: '+265991111004', password: 'admin123', fullName: 'Ops Admin', role: 'ADMIN' },
-  { email: 'student@foodiebus.mw', phone: '+265991111005', password: 'student123', fullName: 'Demo Student', role: 'STUDENT' },
+  {
+    email: 'operator@foodiebus.mw',
+    phone: '+265991111001',
+    password: 'operator123',
+    fullName: 'Northern Coaches',
+    role: 'OPERATOR',
+  },
+  {
+    email: 'vendor@foodiebus.mw',
+    phone: '+265991111002',
+    password: 'vendor123',
+    fullName: 'Chimwemwe Kitchen',
+    role: 'VENDOR',
+  },
+  {
+    email: 'financial@foodiebus.mw',
+    phone: '+265991111003',
+    password: 'financial123',
+    fullName: 'Finance Team',
+    role: 'FINANCIAL',
+  },
+  {
+    email: 'admin2@foodiebus.mw',
+    phone: '+265991111004',
+    password: 'admin123',
+    fullName: 'Ops Admin',
+    role: 'ADMIN',
+  },
+  {
+    email: 'student@foodiebus.mw',
+    phone: '+265991111005',
+    password: 'student123',
+    fullName: 'Demo Student',
+    role: 'STUDENT',
+  },
 ];
 
 async function login() {
@@ -41,7 +71,8 @@ async function createUser(token, user) {
     body: JSON.stringify(user),
   });
   if (res.status === 201) return `created`;
-  if (res.status === 409) return `already exists (password unknown — keep or use a different email)`;
+  if (res.status === 409)
+    return `already exists (password unknown — keep or use a different email)`;
   const body = await res.json().catch(() => ({}));
   console.error(`  FAILED ${user.email} (${res.status}): ${JSON.stringify(body)}`);
   process.exit(1);
