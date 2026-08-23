@@ -1,0 +1,47 @@
+# Render Blueprint for FoodieBus web dashboards.
+# The backend API is already deployed manually (Docker). This file only
+# defines the three Vite static sites. Import via:
+#   Render Dashboard -> New -> Blueprint -> connect this repo.
+#
+# Build flow: install all workspaces, build shared packages, then the app.
+# VITE_API_URL / VITE_WS_URL are baked in at build time (Vite requirement).
+
+staticSites:
+  - name: foodiebus-web-admin
+    rootDir: /
+    buildCommand: npm ci && npm run build --workspace=@foodiebus/types --workspace=@foodiebus/ui --workspace=@foodiebus/auth --workspace=@foodiebus/api-client && npm run build --workspace=@foodiebus/web-admin
+    publish: apps/web-admin/dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://foodiebus.onrender.com/api/v1
+      - key: VITE_WS_URL
+        value: https://foodiebus.onrender.com
+    rewrites:
+      - source: /*
+        destination: /index.html
+
+  - name: foodiebus-web-vendor
+    rootDir: /
+    buildCommand: npm ci && npm run build --workspace=@foodiebus/types --workspace=@foodiebus/ui --workspace=@foodiebus/auth --workspace=@foodiebus/api-client && npm run build --workspace=@foodiebus/web-vendor
+    publish: apps/web-vendor/dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://foodiebus.onrender.com/api/v1
+      - key: VITE_WS_URL
+        value: https://foodiebus.onrender.com
+    rewrites:
+      - source: /*
+        destination: /index.html
+
+  - name: foodiebus-web-financial
+    rootDir: /
+    buildCommand: npm ci && npm run build --workspace=@foodiebus/types --workspace=@foodiebus/ui --workspace=@foodiebus/auth --workspace=@foodiebus/api-client && npm run build --workspace=@foodiebus/web-financial
+    publish: apps/web-financial/dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://foodiebus.onrender.com/api/v1
+      - key: VITE_WS_URL
+        value: https://foodiebus.onrender.com
+    rewrites:
+      - source: /*
+        destination: /index.html
