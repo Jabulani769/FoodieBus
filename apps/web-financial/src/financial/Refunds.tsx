@@ -1,20 +1,9 @@
 import { useState } from 'react';
-import {
-  Button,
-  Card,
-  Form,
-  Input,
-  InputNumber,
-  Modal,
-  Select,
-  Table,
-  Typography,
-  message,
-} from 'antd';
+import { Button, Card, Form, Input, InputNumber, Modal, Select, Table, message } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Api, extractError } from '@foodiebus/api-client';
-import { formatMoney, formatDate, StatusBadge } from '@foodiebus/ui';
+import { formatMoney, formatDate, StatusBadge, EmptyState, PageHeader } from '@foodiebus/ui';
 import { http } from '../api.js';
 import type { Refund, RefundStatus } from '@foodiebus/types';
 
@@ -113,7 +102,7 @@ export function RefundsPage() {
 
   return (
     <>
-      <Typography.Title level={3}>Refunds</Typography.Title>
+      <PageHeader title="Refunds" />
       <Card
         title={
           <Select
@@ -134,7 +123,13 @@ export function RefundsPage() {
           </Button>
         }
       >
-        <Table rowKey="id" columns={columns} dataSource={data?.items ?? []} loading={isLoading} />
+        <Table
+          rowKey="id"
+          columns={columns}
+          dataSource={data?.items ?? []}
+          loading={isLoading}
+          locale={{ emptyText: <EmptyState title="No refunds found" /> }}
+        />
       </Card>
       <Modal
         title="Request refund"

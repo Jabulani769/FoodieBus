@@ -4,6 +4,50 @@ import { logger } from '../../shared/logger/index.js';
 import { NOTIFICATIONS_QUEUE } from '../queues.js';
 import { createRedisConnection } from '../connection.js';
 import { getProvider } from '../../modules/notifications/providers/index.js';
+import type { Notification } from '../../generated/prisma/client.js';
+
+async function sendPush(
+  notification: Notification & { user: { phone: string | null; email: string | null } },
+): Promise<void> {
+  const tokens = await prisma.deviceToken.findMany({
+    where: { userId: notification.userId, isActive: true },
+    select: { token: true },
+  });
+  if (tokens.length === 0) {
+    await prisma.notification.update({
+      where: { id: notification.id },
+      data: {
+        status: 'SENT',
+        sentAt: new Date(),
+        metadata: { note: 'no active device tokens' },
+      },
+    });
+    return;
+  }
+
+  const provider = getProvider('PUSH');
+  let delivered = 0;
+  for (const { token } of tokens) {
+    try {
+      const { messageId } = await provider.send({
+        to: token,
+        subject: notification.subject ?? undefined,
+        body: notification.body,
+      });
+      delivered += 1;
+      await prisma.notification.update({
+        where: { id: notification.id },
+        data: { status: 'SENT', sentAt: new Date(), metadata: { messageId } },
+      });
+    } catch (err) {
+      logger.warn({ err, token }, 'push send failed for token');
+    }
+  }
+
+  if (delivered === 0) {
+    throw new Error('push failed for all device tokens');
+  }
+}
 
 export function startNotificationWorker(): Worker {
   const worker = new Worker(
@@ -23,6 +67,11 @@ export function startNotificationWorker(): Worker {
         notification.status === 'DELIVERED' ||
         notification.status === 'READ'
       ) {
+        return;
+      }
+
+      if (notification.channel === 'PUSH') {
+        await sendPush(notification);
         return;
       }
 

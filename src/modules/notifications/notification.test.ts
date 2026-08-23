@@ -23,6 +23,10 @@ describe('notifications module', () => {
 
   beforeEach(async () => {
     await prisma.rating.deleteMany();
+    await prisma.deviceToken.deleteMany();
+    await prisma.favorite.deleteMany();
+    await prisma.couponUsage.deleteMany();
+    await prisma.coupon.deleteMany();
     await prisma.webhookEvent.deleteMany();
 
     await prisma.reconciliationMismatch.deleteMany();
@@ -462,6 +466,83 @@ describe('notifications module', () => {
       expect(expired).toBe(0);
       const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
       expect(booking?.status).toBe('CONFIRMED');
+    });
+  });
+
+  describe('Push device tokens', () => {
+    it('registers a device token (upsert)', async () => {
+      const student = await createStudentUser();
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/v1/notifications/devices',
+        headers: { authorization: `Bearer ${student.accessToken}` },
+        payload: { token: 'fcm-token-abc123', platform: 'ANDROID' },
+      });
+      expect(res.statusCode).toBe(201);
+      const again = await app.inject({
+        method: 'POST',
+        url: '/api/v1/notifications/devices',
+        headers: { authorization: `Bearer ${student.accessToken}` },
+        payload: { token: 'fcm-token-abc123', platform: 'IOS' },
+      });
+      expect(again.statusCode).toBe(201);
+      const count = await prisma.deviceToken.count({ where: { userId: student.user.id } });
+      expect(count).toBe(1);
+      const device = await prisma.deviceToken.findFirst({ where: { userId: student.user.id } });
+      expect(device?.platform).toBe('IOS');
+    });
+
+    it('lists own device tokens', async () => {
+      const student = await createStudentUser();
+      await app.inject({
+        method: 'POST',
+        url: '/api/v1/notifications/devices',
+        headers: { authorization: `Bearer ${student.accessToken}` },
+        payload: { token: 'fcm-token-xyz' },
+      });
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/v1/notifications/devices',
+        headers: { authorization: `Bearer ${student.accessToken}` },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().items.length).toBe(1);
+    });
+
+    it('removes a device token', async () => {
+      const student = await createStudentUser();
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/v1/notifications/devices',
+        headers: { authorization: `Bearer ${student.accessToken}` },
+        payload: { token: 'fcm-token-remove' },
+      });
+      const id = res.json().id as string;
+      const del = await app.inject({
+        method: 'DELETE',
+        url: `/api/v1/notifications/devices/${id}`,
+        headers: { authorization: `Bearer ${student.accessToken}` },
+      });
+      expect(del.statusCode).toBe(204);
+      const gone = await prisma.deviceToken.findUnique({ where: { id } });
+      expect(gone).toBeNull();
+    });
+
+    it('forbids removing another user device token', async () => {
+      const studentA = await createStudentUser();
+      const studentB = await createStudentUser();
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/v1/notifications/devices',
+        headers: { authorization: `Bearer ${studentA.accessToken}` },
+        payload: { token: 'fcm-token-other' },
+      });
+      const del = await app.inject({
+        method: 'DELETE',
+        url: `/api/v1/notifications/devices/${res.json().id}`,
+        headers: { authorization: `Bearer ${studentB.accessToken}` },
+      });
+      expect(del.statusCode).toBe(403);
     });
   });
 });

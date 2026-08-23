@@ -47,6 +47,10 @@ describe('analytics module', () => {
     });
 
     await prisma.rating.deleteMany();
+    await prisma.deviceToken.deleteMany();
+    await prisma.favorite.deleteMany();
+    await prisma.couponUsage.deleteMany();
+    await prisma.coupon.deleteMany();
     await prisma.webhookEvent.deleteMany();
 
     await prisma.reconciliationMismatch.deleteMany();

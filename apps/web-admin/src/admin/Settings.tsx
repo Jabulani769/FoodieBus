@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button, Card, Form, Input, Modal, Table, Typography, message } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Api, extractError } from '@foodiebus/api-client';
-import { formatDate } from '@foodiebus/ui';
+import { formatDate, EmptyState, PageHeader } from '@foodiebus/ui';
 import { http } from '../api.js';
 
 const api = new Api(http);
@@ -38,23 +38,29 @@ export function SettingsPage() {
       title: 'Key',
       dataIndex: 'key',
       key: 'key',
+      width: 220,
+      ellipsis: true,
       render: (v: string) => <Typography.Text code>{v}</Typography.Text>,
     },
     {
       title: 'Value',
       dataIndex: 'value',
       key: 'value',
+      width: 420,
+      ellipsis: true,
       render: (v: unknown) => (typeof v === 'object' ? JSON.stringify(v) : String(v)),
     },
     {
       title: 'Updated',
       dataIndex: 'updatedAt',
       key: 'updatedAt',
+      width: 180,
       render: (v: string) => formatDate(v),
     },
     {
       title: 'Actions',
       key: 'actions',
+      width: 100,
       render: (_: unknown, record: SettingRow) => (
         <Button
           size="small"
@@ -87,13 +93,16 @@ export function SettingsPage() {
 
   return (
     <>
-      <Typography.Title level={3}>Platform Settings</Typography.Title>
+      <PageHeader title="Platform Settings" subtitle="Key-value configuration" />
       <Card>
         <Table
           rowKey="key"
           columns={columns}
           dataSource={(data ?? []) as SettingRow[]}
           loading={isLoading}
+          tableLayout="fixed"
+          scroll={{ x: 'max-content' }}
+          locale={{ emptyText: <EmptyState title="No settings yet" /> }}
         />
       </Card>
       <Modal

@@ -24,3 +24,16 @@ export const updatePreferenceSchema = z.object({
       message: 'At least one preference field must be provided',
     }),
 });
+
+export const registerDeviceTokenSchema = z.object({
+  body: z.object({
+    token: z.string().min(10).max(512),
+    platform: z.enum(['ANDROID', 'IOS']).default('ANDROID'),
+  }),
+});
+
+export const deviceTokenParamsSchema = z.object({
+  params: z.object({
+    id: z.string().uuid('Invalid device token id'),
+  }),
+});

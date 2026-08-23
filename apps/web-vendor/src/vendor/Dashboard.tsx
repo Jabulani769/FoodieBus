@@ -1,7 +1,8 @@
-import { Card, Col, Row, Statistic, Table, Typography } from 'antd';
+import { Card, Col, Row, Table } from 'antd';
 import { useQuery } from '@tanstack/react-query';
+import { FileDoneOutlined, ShopOutlined, WalletOutlined } from '@ant-design/icons';
 import { Api } from '@foodiebus/api-client';
-import { formatMoney } from '@foodiebus/ui';
+import { formatMoney, StatCard, EmptyState, PageHeader, colors, StatusBadge } from '@foodiebus/ui';
 import { http } from '../api.js';
 import { useAuth } from '@foodiebus/auth';
 
@@ -36,7 +37,12 @@ export function VendorDashboard() {
 
   const columns = [
     { title: 'Order', dataIndex: 'id', key: 'id', ellipsis: true },
-    { title: 'Status', dataIndex: 'status', key: 'status' },
+    {
+      title: 'Status',
+      dataIndex: 'status',
+      key: 'status',
+      render: (v: string) => <StatusBadge status={v} />,
+    },
     {
       title: 'Amount',
       dataIndex: 'totalAmount',
@@ -47,31 +53,71 @@ export function VendorDashboard() {
 
   return (
     <>
-      <Typography.Title level={3}>Vendor Dashboard</Typography.Title>
+      <PageHeader title="Vendor Dashboard" subtitle="Your on-board dining at a glance" />
+      <Card style={{ marginBottom: 16, borderRadius: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: 12,
+              background: `${colors.primary}14`,
+              color: colors.primary,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 22,
+            }}
+          >
+            <ShopOutlined />
+          </div>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 16 }}>
+              {profile?.businessName || 'Your business'}
+            </div>
+            <div style={{ fontSize: 13, color: colors.text.secondary }}>
+              {profile?.description || 'Welcome back, manage your menu and orders below.'}
+            </div>
+          </div>
+        </div>
+      </Card>
       <Row gutter={[16, 16]}>
-        <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic title="Active orders" value={activeOrders} />
-          </Card>
+        <Col xs={24} sm={12} lg={8}>
+          <StatCard
+            title="Active orders"
+            value={activeOrders}
+            icon={<FileDoneOutlined />}
+            loading={!orders}
+            color={colors.warning}
+          />
         </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic title="Available dishes" value={availableDishes} />
-          </Card>
+        <Col xs={24} sm={12} lg={8}>
+          <StatCard
+            title="Available dishes"
+            value={availableDishes}
+            icon={<ShopOutlined />}
+            loading={!dishes}
+            color={colors.success}
+          />
         </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic title="Recent order value" value={formatMoney(revenue)} />
-          </Card>
+        <Col xs={24} sm={12} lg={8}>
+          <StatCard
+            title="Recent order value"
+            value={formatMoney(revenue)}
+            icon={<WalletOutlined />}
+            loading={!orders}
+            color={colors.primary}
+          />
         </Col>
       </Row>
-      <Card title="Recent orders" style={{ marginTop: 16 }}>
+      <Card title="Recent orders" style={{ marginTop: 16, borderRadius: 12 }}>
         <Table
           rowKey="id"
           columns={columns}
           dataSource={orders?.items ?? []}
           pagination={false}
           loading={!orders}
+          locale={{ emptyText: <EmptyState title="No recent orders" /> }}
         />
       </Card>
     </>

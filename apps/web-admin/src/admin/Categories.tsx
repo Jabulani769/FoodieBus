@@ -10,12 +10,12 @@ import {
   Space,
   Table,
   Switch,
-  Typography,
   message,
 } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Api, extractError } from '@foodiebus/api-client';
+import { EmptyState, PageHeader } from '@foodiebus/ui';
 import { http } from '../api.js';
 
 const api = new Api(http);
@@ -70,13 +70,14 @@ export function CategoriesPage() {
   });
 
   const columns = [
-    { title: 'Name', dataIndex: 'name', key: 'name' },
-    { title: 'Slug', dataIndex: 'slug', key: 'slug' },
-    { title: 'Sort order', dataIndex: 'sortOrder', key: 'sortOrder' },
+    { title: 'Name', dataIndex: 'name', key: 'name', width: 200, ellipsis: true },
+    { title: 'Slug', dataIndex: 'slug', key: 'slug', width: 160, ellipsis: true },
+    { title: 'Sort order', dataIndex: 'sortOrder', key: 'sortOrder', width: 120 },
     {
       title: 'Active',
       dataIndex: 'isActive',
       key: 'isActive',
+      width: 100,
       render: (v: boolean, record: CategoryRow) => (
         <Switch checked={v} onChange={() => toggle.mutate(record)} />
       ),
@@ -84,6 +85,7 @@ export function CategoriesPage() {
     {
       title: 'Actions',
       key: 'actions',
+      width: 150,
       render: (_: unknown, record: CategoryRow) => (
         <Space>
           <Button
@@ -115,7 +117,7 @@ export function CategoriesPage() {
 
   return (
     <>
-      <Typography.Title level={3}>Categories</Typography.Title>
+      <PageHeader title="Categories" subtitle="Food menu categories" />
       <Card
         extra={
           <Button
@@ -131,7 +133,15 @@ export function CategoriesPage() {
           </Button>
         }
       >
-        <Table rowKey="id" columns={columns} dataSource={data?.items ?? []} loading={isLoading} />
+        <Table
+          rowKey="id"
+          columns={columns}
+          dataSource={data?.items ?? []}
+          loading={isLoading}
+          tableLayout="fixed"
+          scroll={{ x: 'max-content' }}
+          locale={{ emptyText: <EmptyState title="No categories yet" /> }}
+        />
       </Card>
       <Modal
         title={editing ? 'Edit category' : 'New category'}

@@ -14,6 +14,8 @@ import {
   listOperatorsSchema,
   operatorParamsSchema,
   routeParamsSchema,
+  routeStopsSchema,
+  rescheduleBookingSchema,
   searchTripsSchema,
   tripParamsSchema,
   updateBusSchema,
@@ -367,6 +369,19 @@ export async function registerBusRoutes(app: FastifyInstance): Promise<void> {
                     toCity: { type: 'string' },
                     basePrice: { type: 'string' },
                     distanceKm: { type: 'integer' },
+                    stops: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          id: { type: 'string' },
+                          order: { type: 'integer' },
+                          city: { type: 'string' },
+                          departureOffsetMinutes: { type: 'integer' },
+                          segmentPrice: { type: 'string' },
+                        },
+                      },
+                    },
                   },
                 },
               },
@@ -483,6 +498,53 @@ export async function registerBusRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
+  app.put(
+    '/bus-routes/:id/stops',
+    {
+      preHandler: [authenticate, authorize('SUPER_ADMIN', 'ADMIN')],
+      schema: {
+        tags: ['bus'],
+        summary: 'Replace the stops of a route (admin only)',
+        security: [{ bearerAuth: [] }],
+        params: { type: 'object', properties: { id: { type: 'string' } } },
+        body: {
+          type: 'object',
+          properties: {
+            stops: {
+              type: 'array',
+              minItems: 2,
+              items: {
+                type: 'object',
+                properties: {
+                  city: { type: 'string' },
+                  departureOffsetMinutes: { type: 'integer', minimum: 0 },
+                  segmentPrice: { type: 'number', minimum: 0 },
+                },
+                required: ['city', 'departureOffsetMinutes', 'segmentPrice'],
+              },
+            },
+          },
+          required: ['stops'],
+        },
+        response: { 200: { type: 'object', properties: { id: { type: 'string' } } } },
+      },
+    },
+    async (request: FastifyRequest, reply) => {
+      const actor = requireUser(request);
+      const parsed = routeStopsSchema.parse(request);
+      const result = await busService.setRouteStops(parsed.params.id, parsed.body.stops);
+      await writeAuditLog({
+        actorId: actor.id,
+        action: 'route.stops.update',
+        entity: 'route',
+        entityId: parsed.params.id,
+        details: { stops: parsed.body.stops },
+        ipAddress: request.ip,
+      });
+      return reply.send(result);
+    },
+  );
+
   // ---- Trips ----
 
   app.get(
@@ -527,6 +589,19 @@ export async function registerBusRoutes(app: FastifyInstance): Promise<void> {
                       properties: {
                         fromCity: { type: 'string' },
                         toCity: { type: 'string' },
+                        stops: {
+                          type: 'array',
+                          items: {
+                            type: 'object',
+                            properties: {
+                              id: { type: 'string' },
+                              order: { type: 'integer' },
+                              city: { type: 'string' },
+                              departureOffsetMinutes: { type: 'integer' },
+                              segmentPrice: { type: 'string' },
+                            },
+                          },
+                        },
                       },
                     },
                   },
@@ -569,7 +644,23 @@ export async function registerBusRoutes(app: FastifyInstance): Promise<void> {
               },
               route: {
                 type: 'object',
-                properties: { fromCity: { type: 'string' }, toCity: { type: 'string' } },
+                properties: {
+                  fromCity: { type: 'string' },
+                  toCity: { type: 'string' },
+                  stops: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        id: { type: 'string' },
+                        order: { type: 'integer' },
+                        city: { type: 'string' },
+                        departureOffsetMinutes: { type: 'integer' },
+                        segmentPrice: { type: 'string' },
+                      },
+                    },
+                  },
+                },
               },
               bus: {
                 type: 'object',
@@ -776,6 +867,9 @@ export async function registerBusRoutes(app: FastifyInstance): Promise<void> {
             seatNumber: { type: 'string' },
             passengerName: { type: 'string' },
             passengerPhone: { type: 'string' },
+            couponCode: { type: 'string' },
+            originStopId: { type: 'string' },
+            destinationStopId: { type: 'string' },
           },
           required: ['tripId', 'seatNumber', 'passengerName', 'passengerPhone'],
         },
@@ -823,6 +917,26 @@ export async function registerBusRoutes(app: FastifyInstance): Promise<void> {
                       type: 'object',
                       properties: { seatNumber: { type: 'string' } },
                     },
+                    originStop: {
+                      type: 'object',
+                      properties: {
+                        id: { type: 'string' },
+                        order: { type: 'integer' },
+                        city: { type: 'string' },
+                        departureOffsetMinutes: { type: 'integer' },
+                        segmentPrice: { type: 'string' },
+                      },
+                    },
+                    destinationStop: {
+                      type: 'object',
+                      properties: {
+                        id: { type: 'string' },
+                        order: { type: 'integer' },
+                        city: { type: 'string' },
+                        departureOffsetMinutes: { type: 'integer' },
+                        segmentPrice: { type: 'string' },
+                      },
+                    },
                     trip: {
                       type: 'object',
                       properties: {
@@ -861,6 +975,11 @@ export async function registerBusRoutes(app: FastifyInstance): Promise<void> {
       schema: {
         tags: ['bus'],
         summary: 'Cancel an own booking and release its seat',
+        description:
+          'Unpaid bookings are cancelled immediately. Paid bookings are cancelled and an ' +
+          'auto-refund is requested per the platform cancellation policy (full refund when ' +
+          'cancelled more than cancelBeforeHours before departure, otherwise the configured ' +
+          'refund percent).',
         security: [{ bearerAuth: [] }],
         params: { type: 'object', properties: { id: { type: 'string' } } },
         response: { 200: { type: 'object', properties: { id: { type: 'string' } } } },
@@ -875,6 +994,51 @@ export async function registerBusRoutes(app: FastifyInstance): Promise<void> {
         action: 'booking.cancel',
         entity: 'booking',
         entityId: id,
+        ipAddress: request.ip,
+      });
+      return reply.send(booking);
+    },
+  );
+
+  app.post(
+    '/bookings/:id/reschedule',
+    {
+      preHandler: [authenticate],
+      schema: {
+        tags: ['bus'],
+        summary: 'Reschedule an unpaid booking to another trip',
+        description:
+          'Moves a PENDING booking to a different trip and seat, releasing the old seat. ' +
+          'Total is recomputed (new trip price + reschedule fee when inside the policy window) ' +
+          'and any applied coupon is cleared.',
+        security: [{ bearerAuth: [] }],
+        params: { type: 'object', properties: { id: { type: 'string' } } },
+        body: {
+          type: 'object',
+          properties: {
+            tripId: { type: 'string' },
+            seatNumber: { type: 'string' },
+          },
+          required: ['tripId', 'seatNumber'],
+        },
+        response: { 200: { type: 'object', properties: { id: { type: 'string' } } } },
+      },
+    },
+    async (request: FastifyRequest, reply) => {
+      const actor = requireUser(request);
+      const parsed = rescheduleBookingSchema.parse(request);
+      const booking = await busService.rescheduleBooking(
+        parsed.params.id,
+        parsed.body.tripId,
+        parsed.body.seatNumber,
+        actor.id,
+      );
+      await writeAuditLog({
+        actorId: actor.id,
+        action: 'booking.reschedule',
+        entity: 'booking',
+        entityId: booking.id,
+        details: { tripId: parsed.body.tripId, seatNumber: parsed.body.seatNumber },
         ipAddress: request.ip,
       });
       return reply.send(booking);

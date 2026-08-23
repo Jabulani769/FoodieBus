@@ -1,9 +1,11 @@
-import { Button, Card, Form, Input, Typography, message } from 'antd';
+import { Button, Card, Form, Input, message } from 'antd';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Api } from '@foodiebus/api-client';
 import { extractError } from '@foodiebus/api-client';
 import { http } from '../api.js';
 import { useAuth } from '@foodiebus/auth';
+
+import { PageHeader } from '@foodiebus/ui';
 
 const api = new Api(http);
 
@@ -30,7 +32,7 @@ export function ProfilePage() {
 
   return (
     <>
-      <Typography.Title level={3}>Profile &amp; Settings</Typography.Title>
+      <PageHeader title="Profile &amp; Settings" />
       <Card style={{ maxWidth: 560 }}>
         <Form
           layout="vertical"

@@ -48,6 +48,12 @@ const envSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
 
+  PUSH_PROVIDER: z.enum(['mock', 'fcm', 'apns']).default('mock'),
+  FCM_SERVER_KEY: z.string().optional(),
+  APNS_KEY_ID: z.string().optional(),
+  APNS_TEAM_ID: z.string().optional(),
+  APNS_TOPIC: z.string().default('com.foodiebus.app'),
+
   // ---- Storage ----
   STORAGE_PROVIDER: z.enum(['mock', 's3']).default('mock'),
   STORAGE_UPLOAD_DIR: z.string().default('./uploads'),

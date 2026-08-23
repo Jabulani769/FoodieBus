@@ -161,11 +161,42 @@ export const createBookingSchema = z.object({
     seatNumber: z.string().min(1, 'seatNumber is required'),
     passengerName: z.string().min(1, 'passengerName is required'),
     passengerPhone: phoneSchema,
+    couponCode: z
+      .string()
+      .min(1)
+      .max(50)
+      .transform((s) => s.trim().toUpperCase())
+      .optional(),
+    originStopId: z.string().uuid('Invalid origin stop id').optional(),
+    destinationStopId: z.string().uuid('Invalid destination stop id').optional(),
+  }),
+});
+
+export const routeStopsSchema = z.object({
+  params: z.object({ id: z.string().uuid('Invalid route id') }),
+  body: z.object({
+    stops: z
+      .array(
+        z.object({
+          city: z.string().min(1, 'city is required'),
+          departureOffsetMinutes: z.number().int().min(0),
+          segmentPrice: z.number().nonnegative(),
+        }),
+      )
+      .min(2, 'A route needs at least an origin and a destination stop'),
   }),
 });
 
 export const bookingParamsSchema = z.object({
   params: z.object({ id: z.string().uuid('Invalid booking id') }),
+});
+
+export const rescheduleBookingSchema = z.object({
+  params: z.object({ id: z.string().uuid('Invalid booking id') }),
+  body: z.object({
+    tripId: z.string().uuid('Invalid trip id'),
+    seatNumber: z.string().min(1, 'seatNumber is required'),
+  }),
 });
 
 // ---- Drivers & trip fulfillment ----

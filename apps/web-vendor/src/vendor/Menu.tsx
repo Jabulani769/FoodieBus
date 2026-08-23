@@ -2,26 +2,23 @@ import { useState } from 'react';
 import {
   Button,
   Card,
-  Col,
   Form,
   Input,
   InputNumber,
   Modal,
   Popconfirm,
-  Row,
   Select,
   Space,
   Switch,
   Table,
   Upload,
-  Typography,
   message,
 } from 'antd';
 import { PlusOutlined, UploadOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Api } from '@foodiebus/api-client';
 import { extractError } from '@foodiebus/api-client';
-import { formatMoney } from '@foodiebus/ui';
+import { formatMoney, EmptyState, PageHeader } from '@foodiebus/ui';
 import { http } from '../api.js';
 import { useAuth } from '@foodiebus/auth';
 
@@ -166,20 +163,23 @@ export function MenuPage() {
 
   return (
     <>
-      <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
-        <Col>
-          <Typography.Title level={3} style={{ margin: 0 }}>
-            Menu Management
-          </Typography.Title>
-        </Col>
-        <Col>
+      <PageHeader
+        title="Menu Management"
+        subtitle="Manage dishes available on board"
+        extra={
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
             New dish
           </Button>
-        </Col>
-      </Row>
+        }
+      />
       <Card>
-        <Table rowKey="id" columns={columns} dataSource={dishes?.items ?? []} loading={isLoading} />
+        <Table
+          rowKey="id"
+          columns={columns}
+          dataSource={dishes?.items ?? []}
+          loading={isLoading}
+          locale={{ emptyText: <EmptyState title="No dishes yet" /> }}
+        />
       </Card>
 
       <Modal

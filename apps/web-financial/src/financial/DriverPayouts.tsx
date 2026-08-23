@@ -1,7 +1,7 @@
-import { Button, Card, Table, Typography, message } from 'antd';
+import { Button, Card, Table, message } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Api, extractError } from '@foodiebus/api-client';
-import { formatMoney, StatusBadge } from '@foodiebus/ui';
+import { formatMoney, StatusBadge, EmptyState, PageHeader } from '@foodiebus/ui';
 import { http } from '../api.js';
 import type { DriverPayout } from '@foodiebus/types';
 
@@ -53,9 +53,15 @@ export function DriverPayoutsPage() {
 
   return (
     <>
-      <Typography.Title level={3}>Driver Payouts</Typography.Title>
+      <PageHeader title="Driver Payouts" />
       <Card>
-        <Table rowKey="id" columns={columns} dataSource={data?.items ?? []} loading={isLoading} />
+        <Table
+          rowKey="id"
+          columns={columns}
+          dataSource={data?.items ?? []}
+          loading={isLoading}
+          locale={{ emptyText: <EmptyState title="No driver payouts yet" /> }}
+        />
       </Card>
     </>
   );

@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { Button, Card, Form, Input, Modal, Popconfirm, Table, Typography, message } from 'antd';
+import { Button, Card, Form, Input, Modal, Popconfirm, Table, message } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Api } from '@foodiebus/api-client';
 import { extractError } from '@foodiebus/api-client';
 import { http } from '../api.js';
+
+import { EmptyState, PageHeader } from '@foodiebus/ui';
 
 const api = new Api(http);
 
@@ -79,7 +81,7 @@ export function DriversPage() {
 
   return (
     <>
-      <Typography.Title level={3}>Drivers</Typography.Title>
+      <PageHeader title="Drivers" />
       <Card
         extra={
           <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
@@ -92,6 +94,7 @@ export function DriversPage() {
           columns={columns}
           dataSource={drivers?.items ?? []}
           loading={isLoading}
+          locale={{ emptyText: <EmptyState title="No drivers yet" /> }}
         />
       </Card>
       <Modal

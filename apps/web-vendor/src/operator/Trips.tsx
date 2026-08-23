@@ -9,14 +9,13 @@ import {
   Select,
   Space,
   Table,
-  Typography,
   message,
 } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Api } from '@foodiebus/api-client';
 import { extractError } from '@foodiebus/api-client';
-import { formatMoney, formatDate, StatusBadge } from '@foodiebus/ui';
+import { formatMoney, formatDate, StatusBadge, EmptyState, PageHeader } from '@foodiebus/ui';
 import { http } from '../api.js';
 import { useAuth } from '@foodiebus/auth';
 import type { TripStatus } from '@foodiebus/types';
@@ -152,7 +151,7 @@ export function TripsPage() {
 
   return (
     <>
-      <Typography.Title level={3}>Trips &amp; Schedules</Typography.Title>
+      <PageHeader title="Trips &amp; Schedules" />
       <Card
         extra={
           <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
@@ -160,7 +159,13 @@ export function TripsPage() {
           </Button>
         }
       >
-        <Table rowKey="id" columns={columns} dataSource={trips?.items ?? []} loading={isLoading} />
+        <Table
+          rowKey="id"
+          columns={columns}
+          dataSource={trips?.items ?? []}
+          loading={isLoading}
+          locale={{ emptyText: <EmptyState title="No trips scheduled yet" /> }}
+        />
       </Card>
       <Modal
         title="Schedule trip"

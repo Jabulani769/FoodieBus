@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { io } from 'socket.io-client';
 import { Api } from '@foodiebus/api-client';
 import { extractError } from '@foodiebus/api-client';
-import { formatMoney, formatDate, StatusBadge } from '@foodiebus/ui';
+import { formatMoney, formatDate, StatusBadge, EmptyState, PageHeader } from '@foodiebus/ui';
 import { http, wsUrl } from '../api.js';
 import { useAuth } from '@foodiebus/auth';
 import { tokenStore } from '@foodiebus/auth';
@@ -146,7 +146,7 @@ export function OrdersPage() {
 
   return (
     <>
-      <Typography.Title level={3}>Orders</Typography.Title>
+      <PageHeader title="Orders" />
       <Card
         title={
           <Space>
@@ -164,7 +164,13 @@ export function OrdersPage() {
           </Space>
         }
       >
-        <Table rowKey="id" columns={columns} dataSource={orders?.items ?? []} loading={isLoading} />
+        <Table
+          rowKey="id"
+          columns={columns}
+          dataSource={orders?.items ?? []}
+          loading={isLoading}
+          locale={{ emptyText: <EmptyState title="No orders yet" /> }}
+        />
       </Card>
     </>
   );

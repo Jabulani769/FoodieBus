@@ -2,6 +2,7 @@ import { prisma } from '../../shared/db/prisma.js';
 import { AppError } from '../../shared/errors/AppError.js';
 import { writeAuditLog } from '../../shared/audit/audit.js';
 import { emitFoodOrderStatus } from '../../realtime/index.js';
+import { couponService } from '../coupons/coupon.service.js';
 import type { FoodOrderStatus } from '../../generated/prisma/enums.js';
 
 const STATUS_FLOW: FoodOrderStatus[] = ['PLACED', 'PREPARING', 'READY', 'DELIVERED_TO_BUS'];
@@ -10,6 +11,7 @@ export interface PlaceFoodOrderInput {
   bookingId: string;
   items: { dishId: string; quantity: number }[];
   note?: string;
+  couponCode?: string;
 }
 
 export class DeliveryService {
@@ -56,13 +58,33 @@ export class DeliveryService {
     }
 
     const order = await prisma.$transaction(async (tx) => {
+      const orderId = crypto.randomUUID();
+      let couponCode: string | undefined;
+      let discountAmount = 0;
+      let finalAmount = total;
+      if (data.couponCode) {
+        const coupon = await couponService.redeemCoupon(
+          tx,
+          data.couponCode,
+          passengerId,
+          { contextType: 'food_order', contextId: orderId },
+          { applicableTo: 'FOOD', amount: total },
+        );
+        couponCode = coupon.code;
+        discountAmount = coupon.discountAmount;
+        finalAmount = coupon.finalAmount;
+      }
+
       const created = await tx.foodOrder.create({
         data: {
+          id: orderId,
           bookingId: booking.id,
           passengerId,
           tripId: booking.trip.id,
           vendorId,
-          totalAmount: total,
+          totalAmount: finalAmount,
+          couponCode,
+          discountAmount,
           note: data.note,
         },
       });

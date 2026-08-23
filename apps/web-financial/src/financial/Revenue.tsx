@@ -1,9 +1,15 @@
-import { Card, Col, DatePicker, Row, Statistic, Table, Typography } from 'antd';
+import { Card, Col, DatePicker, Row, Table } from 'antd';
 import { useQuery } from '@tanstack/react-query';
+import {
+  WalletOutlined,
+  CreditCardOutlined,
+  CoffeeOutlined,
+  UndoOutlined,
+} from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useState } from 'react';
 import { Api } from '@foodiebus/api-client';
-import { formatMoney } from '@foodiebus/ui';
+import { formatMoney, StatCard, EmptyState, PageHeader, colors } from '@foodiebus/ui';
 import { http } from '../api.js';
 
 const api = new Api(http);
@@ -76,7 +82,7 @@ export function RevenuePage() {
 
   return (
     <>
-      <Typography.Title level={3}>Revenue Reports</Typography.Title>
+      <PageHeader title="Revenue Reports" />
       <RangePicker
         style={{ marginBottom: 16 }}
         value={range}
@@ -86,24 +92,40 @@ export function RevenuePage() {
       />
       <Row gutter={[16, 16]}>
         <Col xs={24} sm={12} lg={6}>
-          <Card loading={isLoading}>
-            <Statistic title="Total revenue" value={formatMoney(report?.totalRevenue ?? '0')} />
-          </Card>
+          <StatCard
+            title="Total revenue"
+            value={formatMoney(report?.totalRevenue ?? '0')}
+            icon={<WalletOutlined />}
+            loading={isLoading}
+            color={colors.success}
+          />
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card loading={isLoading}>
-            <Statistic title="Payments" value={report?.totalPayments ?? 0} />
-          </Card>
+          <StatCard
+            title="Payments"
+            value={report?.totalPayments ?? 0}
+            icon={<CreditCardOutlined />}
+            loading={isLoading}
+            color={colors.primary}
+          />
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card loading={isLoading}>
-            <Statistic title="Food orders" value={report?.foodOrders ?? 0} />
-          </Card>
+          <StatCard
+            title="Food orders"
+            value={report?.foodOrders ?? 0}
+            icon={<CoffeeOutlined />}
+            loading={isLoading}
+            color={colors.info}
+          />
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card loading={isLoading}>
-            <Statistic title="Refunds" value={formatMoney(report?.refunds ?? '0')} />
-          </Card>
+          <StatCard
+            title="Refunds"
+            value={formatMoney(report?.refunds ?? '0')}
+            icon={<UndoOutlined />}
+            loading={isLoading}
+            color={colors.danger}
+          />
         </Col>
       </Row>
       <Card title="Daily revenue" style={{ marginTop: 16 }}>
@@ -113,6 +135,7 @@ export function RevenuePage() {
           dataSource={report?.daily ?? []}
           loading={isLoading}
           pagination={{ pageSize: 10 }}
+          locale={{ emptyText: <EmptyState title="No revenue data for this period" /> }}
         />
       </Card>
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
@@ -124,6 +147,7 @@ export function RevenuePage() {
               dataSource={byRoute?.items ?? []}
               loading={!byRoute}
               pagination={false}
+              locale={{ emptyText: <EmptyState title="No route revenue yet" /> }}
             />
           </Card>
         </Col>
@@ -135,6 +159,7 @@ export function RevenuePage() {
               dataSource={byOperator?.items ?? []}
               loading={!byOperator}
               pagination={false}
+              locale={{ emptyText: <EmptyState title="No operator revenue yet" /> }}
             />
           </Card>
         </Col>

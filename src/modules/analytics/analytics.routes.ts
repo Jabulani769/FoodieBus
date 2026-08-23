@@ -24,8 +24,8 @@ export async function registerAnalyticsRoutes(app: FastifyInstance): Promise<voi
         querystring: {
           type: 'object',
           properties: {
-            from: { type: 'string', format: 'date-time' },
-            to: { type: 'string', format: 'date-time' },
+            from: { type: 'string' },
+            to: { type: 'string' },
           },
           required: ['from', 'to'],
         },
@@ -49,8 +49,8 @@ export async function registerAnalyticsRoutes(app: FastifyInstance): Promise<voi
         querystring: {
           type: 'object',
           properties: {
-            from: { type: 'string', format: 'date-time' },
-            to: { type: 'string', format: 'date-time' },
+            from: { type: 'string' },
+            to: { type: 'string' },
             granularity: { type: 'string', enum: ['daily', 'weekly', 'monthly'], default: 'daily' },
           },
           required: ['from', 'to'],
@@ -77,8 +77,8 @@ export async function registerAnalyticsRoutes(app: FastifyInstance): Promise<voi
         querystring: {
           type: 'object',
           properties: {
-            from: { type: 'string', format: 'date-time' },
-            to: { type: 'string', format: 'date-time' },
+            from: { type: 'string' },
+            to: { type: 'string' },
             routeId: { type: 'string' },
             operatorId: { type: 'string' },
           },
@@ -109,8 +109,8 @@ export async function registerAnalyticsRoutes(app: FastifyInstance): Promise<voi
         querystring: {
           type: 'object',
           properties: {
-            from: { type: 'string', format: 'date-time' },
-            to: { type: 'string', format: 'date-time' },
+            from: { type: 'string' },
+            to: { type: 'string' },
           },
           required: ['from', 'to'],
         },
@@ -134,8 +134,8 @@ export async function registerAnalyticsRoutes(app: FastifyInstance): Promise<voi
         querystring: {
           type: 'object',
           properties: {
-            from: { type: 'string', format: 'date-time' },
-            to: { type: 'string', format: 'date-time' },
+            from: { type: 'string' },
+            to: { type: 'string' },
           },
           required: ['from', 'to'],
         },
@@ -161,8 +161,8 @@ export async function registerAnalyticsRoutes(app: FastifyInstance): Promise<voi
         querystring: {
           type: 'object',
           properties: {
-            from: { type: 'string', format: 'date-time' },
-            to: { type: 'string', format: 'date-time' },
+            from: { type: 'string' },
+            to: { type: 'string' },
           },
           required: ['from', 'to'],
         },
@@ -186,8 +186,8 @@ export async function registerAnalyticsRoutes(app: FastifyInstance): Promise<voi
         querystring: {
           type: 'object',
           properties: {
-            from: { type: 'string', format: 'date-time' },
-            to: { type: 'string', format: 'date-time' },
+            from: { type: 'string' },
+            to: { type: 'string' },
           },
           required: ['from', 'to'],
         },
@@ -213,8 +213,8 @@ export async function registerAnalyticsRoutes(app: FastifyInstance): Promise<voi
         querystring: {
           type: 'object',
           properties: {
-            from: { type: 'string', format: 'date-time' },
-            to: { type: 'string', format: 'date-time' },
+            from: { type: 'string' },
+            to: { type: 'string' },
           },
           required: ['from', 'to'],
         },
@@ -238,8 +238,8 @@ export async function registerAnalyticsRoutes(app: FastifyInstance): Promise<voi
         querystring: {
           type: 'object',
           properties: {
-            from: { type: 'string', format: 'date-time' },
-            to: { type: 'string', format: 'date-time' },
+            from: { type: 'string' },
+            to: { type: 'string' },
             sortBy: { type: 'string', enum: ['bookings', 'spend'], default: 'bookings' },
             limit: { type: 'integer', minimum: 1, maximum: 50, default: 10 },
           },
@@ -267,8 +267,8 @@ export async function registerAnalyticsRoutes(app: FastifyInstance): Promise<voi
         querystring: {
           type: 'object',
           properties: {
-            from: { type: 'string', format: 'date-time' },
-            to: { type: 'string', format: 'date-time' },
+            from: { type: 'string' },
+            to: { type: 'string' },
           },
           required: ['from', 'to'],
         },
@@ -292,8 +292,8 @@ export async function registerAnalyticsRoutes(app: FastifyInstance): Promise<voi
         querystring: {
           type: 'object',
           properties: {
-            from: { type: 'string', format: 'date-time' },
-            to: { type: 'string', format: 'date-time' },
+            from: { type: 'string' },
+            to: { type: 'string' },
           },
           required: ['from', 'to'],
         },
@@ -319,8 +319,8 @@ export async function registerAnalyticsRoutes(app: FastifyInstance): Promise<voi
         querystring: {
           type: 'object',
           properties: {
-            from: { type: 'string', format: 'date-time' },
-            to: { type: 'string', format: 'date-time' },
+            from: { type: 'string' },
+            to: { type: 'string' },
           },
           required: ['from', 'to'],
         },

@@ -1,9 +1,11 @@
-import { Card, Col, DatePicker, Row, Statistic, Typography } from 'antd';
+import { Card, Col, DatePicker, Row } from 'antd';
 import { useQuery } from '@tanstack/react-query';
+import { TeamOutlined, CarryOutOutlined, RetweetOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useState } from 'react';
 import { Column, Pie, Line } from '@ant-design/charts';
 import { Api } from '@foodiebus/api-client';
+import { PageHeader, StatCard, colors, formatPercent } from '@foodiebus/ui';
 import { http } from '../api.js';
 import type { BookingFunnel, PaymentFunnel, PassengerOverview } from '@foodiebus/types';
 
@@ -74,7 +76,7 @@ export function AnalyticsPage() {
 
   return (
     <>
-      <Typography.Title level={3}>Platform Analytics</Typography.Title>
+      <PageHeader title="Platform Analytics" />
       <RangePicker
         style={{ marginBottom: 16 }}
         value={range}
@@ -106,32 +108,31 @@ export function AnalyticsPage() {
       </Row>
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
         <Col xs={24} sm={8}>
-          <Card>
-            <Statistic
-              title="Unique passengers"
-              value={passengers?.uniquePassengers ?? 0}
-              loading={!passengers}
-            />
-          </Card>
+          <StatCard
+            title="Unique passengers"
+            value={passengers?.uniquePassengers ?? 0}
+            icon={<TeamOutlined />}
+            loading={!passengers}
+            color={colors.info}
+          />
         </Col>
         <Col xs={24} sm={8}>
-          <Card>
-            <Statistic
-              title="Avg bookings / passenger"
-              value={passengers?.avgBookingsPerPassenger ?? 0}
-              precision={2}
-              loading={!passengers}
-            />
-          </Card>
+          <StatCard
+            title="Avg bookings / passenger"
+            value={passengers?.avgBookingsPerPassenger ?? 0}
+            icon={<CarryOutOutlined />}
+            loading={!passengers}
+            color={colors.primary}
+          />
         </Col>
         <Col xs={24} sm={8}>
-          <Card>
-            <Statistic
-              title="Repeat passenger rate"
-              value={`${((passengers?.repeatPassengerRate ?? 0) * 100).toFixed(1)}%`}
-              loading={!passengers}
-            />
-          </Card>
+          <StatCard
+            title="Repeat passenger rate"
+            value={formatPercent(passengers?.repeatPassengerRate)}
+            icon={<RetweetOutlined />}
+            loading={!passengers}
+            color={colors.success}
+          />
         </Col>
       </Row>
     </>

@@ -3,6 +3,7 @@ import { buildApp } from '../../app.js';
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../../shared/db/prisma.js';
 import { createUser } from '../auth/auth.service.js';
+import { busService } from './bus.service.js';
 
 describe('bus module', () => {
   let app: FastifyInstance;
@@ -18,22 +19,29 @@ describe('bus module', () => {
 
   beforeEach(async () => {
     await prisma.rating.deleteMany();
+    await prisma.deviceToken.deleteMany();
+    await prisma.favorite.deleteMany();
+    await prisma.couponUsage.deleteMany();
+    await prisma.coupon.deleteMany();
     await prisma.webhookEvent.deleteMany();
 
     await prisma.reconciliationMismatch.deleteMany();
 
     await prisma.driverTripPayout.deleteMany();
+    await prisma.refund.deleteMany();
     await prisma.payment.deleteMany();
     await prisma.foodOrderItem.deleteMany();
     await prisma.foodOrder.deleteMany();
     await prisma.booking.deleteMany();
     await prisma.seatInventory.deleteMany();
     await prisma.trip.deleteMany();
+    await prisma.routeStop.deleteMany();
     await prisma.route.deleteMany();
     await prisma.bus.deleteMany();
     await prisma.operatorProfile.deleteMany();
     await prisma.vendorProfile.deleteMany();
     await prisma.foodCategory.deleteMany();
+    await prisma.platformSetting.deleteMany();
     await prisma.refreshToken.deleteMany();
     await prisma.auditLog.deleteMany();
     await prisma.user.deleteMany();
@@ -130,6 +138,9 @@ describe('bus module', () => {
       ? await prisma.bus.findUnique({ where: { id: overrides.busId } })
       : await createBusForOperator(operatorId);
     const login = await loginAs(operator!.user.email, 'password123');
+    const departure = new Date(Date.now() + 3 * 86400000);
+    departure.setHours(8, 0, 0, 0);
+    const arrival = new Date(departure.getTime() + 4 * 3600000);
     const res = await app.inject({
       method: 'POST',
       url: '/api/v1/trips',
@@ -137,8 +148,8 @@ describe('bus module', () => {
       payload: {
         routeId: route!.id,
         busId: bus!.id,
-        departureTime: '2026-08-20T08:00:00+02:00',
-        arrivalTime: '2026-08-20T12:30:00+02:00',
+        departureTime: departure.toISOString(),
+        arrivalTime: arrival.toISOString(),
         price: 18000,
       },
     });
@@ -470,10 +481,12 @@ describe('bus module', () => {
 
     it('GET /trips/search finds trips by route and date', async () => {
       const operator = await createOperatorUser();
-      await createTripForOperator(operator.operatorProfile!.id);
+      const trip = await createTripForOperator(operator.operatorProfile!.id);
+      const tripRow = await prisma.trip.findUnique({ where: { id: trip.id } });
+      const date = tripRow!.departureTime.toISOString().slice(0, 10);
       const res = await app.inject({
         method: 'GET',
-        url: '/api/v1/trips/search?fromCity=Lilongwe&toCity=Mzuzu&date=2026-08-20',
+        url: `/api/v1/trips/search?fromCity=Lilongwe&toCity=Mzuzu&date=${date}`,
       });
       expect(res.statusCode).toBe(200);
       expect(res.json().items.length).toBe(1);
@@ -734,6 +747,199 @@ describe('bus module', () => {
         headers: { authorization: `Bearer ${loginB.json().accessToken}` },
       });
       expect(res.statusCode).toBe(403);
+    });
+  });
+
+  describe('Cancellation policy & rescheduling', () => {
+    async function createPaidBooking(studentId: string, operatorId: string, tripId: string) {
+      const seat = await prisma.seatInventory.findFirst({
+        where: { tripId, status: 'AVAILABLE' },
+      });
+      const booking = await busService.createBooking(tripId, seat!.seatNumber, studentId, {
+        passengerName: 'Passenger',
+        passengerPhone: '+265991000000',
+      });
+      await busService.confirmBooking(booking.id);
+      await prisma.payment.create({
+        data: {
+          bookingId: booking.id,
+          txRef: `TX-${Math.random().toString(36).slice(2, 10)}`,
+          amount: 18000,
+          currency: 'MWK',
+          status: 'PAID',
+          paidAt: new Date(),
+        },
+      });
+      return booking.id;
+    }
+
+    it('full refund when cancelled well before departure', async () => {
+      const operator = await createOperatorUser();
+      const student = await createStudentUser();
+      const trip = await createTripForOperator(operator.operatorProfile!.id);
+      const bookingId = await createPaidBooking(
+        student.user.id,
+        operator.operatorProfile!.id,
+        trip.id,
+      );
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/v1/bookings/${bookingId}/cancel`,
+        headers: { authorization: `Bearer ${student.accessToken}` },
+      });
+      expect(res.statusCode).toBe(200);
+
+      const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
+      expect(booking?.status).toBe('CANCELLED');
+      const refund = await prisma.refund.findFirst({
+        where: { payment: { bookingId } },
+      });
+      expect(refund).toBeTruthy();
+      expect(Number(refund?.amount)).toBe(18000);
+      expect(refund?.reason).toContain('Passenger cancellation');
+    });
+
+    it('partial refund when cancelled within the policy window', async () => {
+      const operator = await createOperatorUser();
+      const student = await createStudentUser();
+      const route = await prisma.route.create({
+        data: { fromCity: 'Lilongwe', toCity: 'Blantyre', basePrice: 15000 },
+      });
+      const bus = await prisma.bus.create({
+        data: {
+          operatorId: operator.operatorProfile!.id,
+          name: 'Coach',
+          plateNumber: `PL-${Math.random().toString(36).slice(2, 8)}`,
+          capacity: 4,
+        },
+      });
+      const departure = new Date(Date.now() + 2 * 60 * 60 * 1000);
+      const arrival = new Date(Date.now() + 6 * 60 * 60 * 1000);
+      const trip = await busService.createTrip(operator.operatorProfile!.id, {
+        routeId: route.id,
+        busId: bus.id,
+        departureTime: departure.toISOString(),
+        arrivalTime: arrival.toISOString(),
+        price: 18000,
+      });
+      await prisma.platformSetting.upsert({
+        where: { key: 'cancellation_policy' },
+        update: { value: { cancelBeforeHours: 24, refundPercent: 50, rescheduleFee: 2000 } },
+        create: {
+          key: 'cancellation_policy',
+          value: { cancelBeforeHours: 24, refundPercent: 50, rescheduleFee: 2000 },
+        },
+      });
+      const bookingId = await createPaidBooking(
+        student.user.id,
+        operator.operatorProfile!.id,
+        trip.id,
+      );
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/v1/bookings/${bookingId}/cancel`,
+        headers: { authorization: `Bearer ${student.accessToken}` },
+      });
+      expect(res.statusCode).toBe(200);
+      const refund = await prisma.refund.findFirst({ where: { payment: { bookingId } } });
+      expect(Number(refund?.amount)).toBe(9000);
+    });
+
+    it('reschedules an unpaid booking to another trip with a fee inside the window', async () => {
+      const operator = await createOperatorUser();
+      const student = await createStudentUser();
+      await prisma.platformSetting.upsert({
+        where: { key: 'cancellation_policy' },
+        update: { value: { cancelBeforeHours: 24, refundPercent: 50, rescheduleFee: 2000 } },
+        create: {
+          key: 'cancellation_policy',
+          value: { cancelBeforeHours: 24, refundPercent: 50, rescheduleFee: 2000 },
+        },
+      });
+      const route = await prisma.route.create({
+        data: { fromCity: 'Lilongwe', toCity: 'Mzuzu', basePrice: 15000, distanceKm: 350 },
+      });
+      const bus = await prisma.bus.create({
+        data: {
+          operatorId: operator.operatorProfile!.id,
+          name: 'Coach',
+          plateNumber: `PL-${Math.random().toString(36).slice(2, 8)}`,
+          capacity: 6,
+        },
+      });
+      const nearDeparture = new Date(Date.now() + 2 * 60 * 60 * 1000);
+      const nearArrival = new Date(Date.now() + 6 * 60 * 60 * 1000);
+      const tripA = await busService.createTrip(operator.operatorProfile!.id, {
+        routeId: route.id,
+        busId: bus.id,
+        departureTime: nearDeparture.toISOString(),
+        arrivalTime: nearArrival.toISOString(),
+        price: 18000,
+      });
+      const farDeparture = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      const farArrival = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000 + 4 * 3600 * 1000);
+      const tripB = await busService.createTrip(operator.operatorProfile!.id, {
+        routeId: route.id,
+        busId: bus.id,
+        departureTime: farDeparture.toISOString(),
+        arrivalTime: farArrival.toISOString(),
+        price: 20000,
+      });
+
+      const seatA = await prisma.seatInventory.findFirst({ where: { tripId: tripA.id } });
+      const book = await app.inject({
+        method: 'POST',
+        url: '/api/v1/bookings',
+        headers: { authorization: `Bearer ${student.accessToken}` },
+        payload: {
+          tripId: tripA.id,
+          seatNumber: seatA!.seatNumber,
+          passengerName: 'Jane Doe',
+          passengerPhone: '+265991111222',
+        },
+      });
+      const bookingId = book.json().id as string;
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/v1/bookings/${bookingId}/reschedule`,
+        headers: { authorization: `Bearer ${student.accessToken}` },
+        payload: { tripId: tripB.id, seatNumber: '1' },
+      });
+      expect(res.statusCode).toBe(200);
+
+      const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
+      expect(booking?.tripId).toBe(tripB.id);
+      expect(Number(booking?.totalAmount)).toBe(22000);
+      const oldSeat = await prisma.seatInventory.findFirst({
+        where: { tripId: tripA.id, seatNumber: seatA!.seatNumber },
+      });
+      expect(oldSeat?.status).toBe('AVAILABLE');
+      const newSeat = await prisma.seatInventory.findFirst({
+        where: { tripId: tripB.id, seatNumber: '1' },
+      });
+      expect(newSeat?.status).toBe('HELD');
+    });
+
+    it('rejects rescheduling a confirmed (paid) booking', async () => {
+      const operator = await createOperatorUser();
+      const student = await createStudentUser();
+      const trip = await createTripForOperator(operator.operatorProfile!.id);
+      const bookingId = await createPaidBooking(
+        student.user.id,
+        operator.operatorProfile!.id,
+        trip.id,
+      );
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/v1/bookings/${bookingId}/reschedule`,
+        headers: { authorization: `Bearer ${student.accessToken}` },
+        payload: { tripId: trip.id, seatNumber: '2' },
+      });
+      expect(res.statusCode).toBe(409);
     });
   });
 

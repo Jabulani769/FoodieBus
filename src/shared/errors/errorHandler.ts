@@ -32,6 +32,17 @@ export function errorHandler(
     return;
   }
 
+  if (isZodError(error)) {
+    reply.status(400).send({
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: error.message,
+        details: error.issues,
+      },
+    });
+    return;
+  }
+
   if (typeof error.statusCode === 'number' && error.statusCode < 500) {
     reply.status(error.statusCode).send({
       error: {

@@ -14,6 +14,7 @@
     "@ant-design/charts": "^2.3.0",
     "@ant-design/icons": "^5.5.0",
     "@ant-design/pro-components": "^2.8.0",
+    "@ant-design/v5-patch-for-react-19": "^1.0.3",
     "@foodiebus/api-client": "*",
     "@foodiebus/auth": "*",
     "@foodiebus/types": "*",

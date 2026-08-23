@@ -40,6 +40,7 @@ export async function registerDeliveryRoutes(app: FastifyInstance): Promise<void
               },
             },
             note: { type: 'string' },
+            couponCode: { type: 'string' },
           },
           required: ['bookingId', 'items'],
         },

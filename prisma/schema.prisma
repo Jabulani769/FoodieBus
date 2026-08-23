@@ -29,16 +29,27 @@ enum DriverPayoutStatus {
   PAID
 }
 
+enum CouponType {
+  PERCENT
+  FIXED
+}
+
+enum CouponApplicableTo {
+  TRIP
+  FOOD
+  BOTH
+}
+
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  phone        String   @unique
+  id           String    @id @default(uuid())
+  email        String    @unique
+  phone        String    @unique
   passwordHash String
-  role         Role     @default(STUDENT)
+  role         Role      @default(STUDENT)
   fullName     String
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
   deletedAt    DateTime?
 
   refreshTokens          RefreshToken[]
@@ -50,10 +61,13 @@ model User {
   notifications          Notification[]
   otpCodes               OtpCode[]
   notificationPreference NotificationPreference?
-  refundsRequested       Refund[] @relation("RefundRequestedBy")
-  refundsApproved        Refund[] @relation("RefundApprovedBy")
+  refundsRequested       Refund[]                @relation("RefundRequestedBy")
+  refundsApproved        Refund[]                @relation("RefundApprovedBy")
   foodOrders             FoodOrder[]
   ratings                Rating[]
+  couponUsages           CouponUsage[]
+  favorites              Favorite[]
+  deviceTokens           DeviceToken[]
 
   @@index([role])
   @@index([deletedAt])
@@ -85,31 +99,33 @@ model VendorProfile {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  dishes    Dish[]
+  dishes      Dish[]
   settlements Settlement[]
-  foodOrders    FoodOrder[]
+  foodOrders  FoodOrder[]
+  favorites   Favorite[]
 
   @@index([isActive])
 }
 
 model Dish {
-  id            String   @id @default(uuid())
+  id            String        @id @default(uuid())
   vendorId      String
   vendor        VendorProfile @relation(fields: [vendorId], references: [id], onDelete: Cascade)
   categoryId    String
   category      FoodCategory  @relation(fields: [categoryId], references: [id])
   name          String
   description   String?
-  price         Decimal  @db.Decimal(10, 2)
+  price         Decimal       @db.Decimal(10, 2)
   imageUrl      String?
-  isAvailable   Boolean  @default(true)
+  isAvailable   Boolean       @default(true)
   availableFrom DateTime?
   availableTo   DateTime?
-  sortOrder     Int      @default(0)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  sortOrder     Int           @default(0)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
   foodOrderItems FoodOrderItem[]
+  favorites      Favorite[]
 
   @@index([vendorId])
   @@index([categoryId])
@@ -118,16 +134,16 @@ model Dish {
 }
 
 model RefreshToken {
-  id        String   @id @default(uuid())
-  tokenHash String   @unique
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  expiresAt DateTime
-  revokedAt DateTime?
+  id         String    @id @default(uuid())
+  tokenHash  String    @unique
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt  DateTime
+  revokedAt  DateTime?
   replacedBy String?
-  createdAt DateTime @default(now())
-  ipAddress String?
-  userAgent String?
+  createdAt  DateTime  @default(now())
+  ipAddress  String?
+  userAgent  String?
 
   @@index([userId])
   @@index([expiresAt])
@@ -189,25 +205,25 @@ model OperatorProfile {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  buses Bus[]
-  trips Trip[]
+  buses       Bus[]
+  trips       Trip[]
   settlements Settlement[]
-  drivers DriverProfile[]
+  drivers     DriverProfile[]
 
   @@index([isActive])
 }
 
 model Bus {
-  id          String   @id @default(uuid())
+  id          String          @id @default(uuid())
   operatorId  String
   operator    OperatorProfile @relation(fields: [operatorId], references: [id], onDelete: Cascade)
   name        String
-  plateNumber String   @unique
+  plateNumber String          @unique
   capacity    Int
-  busType     BusType  @default(STANDARD)
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  busType     BusType         @default(STANDARD)
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 
   trips Trip[]
 
@@ -226,6 +242,7 @@ model Route {
   updatedAt  DateTime @updatedAt
 
   trips Trip[]
+  stops RouteStop[]
 
   @@unique([fromCity, toCity])
   @@index([fromCity])
@@ -233,27 +250,45 @@ model Route {
   @@index([isActive])
 }
 
+model RouteStop {
+  id                     String   @id @default(uuid())
+  routeId                String
+  route                  Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  order                  Int
+  city                   String
+  departureOffsetMinutes Int
+  segmentPrice           Decimal  @db.Decimal(10, 2)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  bookingsAsOrigin      Booking[] @relation("BookingOriginStop")
+  bookingsAsDestination Booking[] @relation("BookingDestinationStop")
+
+  @@unique([routeId, order])
+  @@index([routeId])
+}
+
 model Trip {
-  id            String      @id @default(uuid())
+  id            String          @id @default(uuid())
   operatorId    String
   operator      OperatorProfile @relation(fields: [operatorId], references: [id], onDelete: Cascade)
   routeId       String
-  route         Route       @relation(fields: [routeId], references: [id])
+  route         Route           @relation(fields: [routeId], references: [id])
   busId         String
-  bus           Bus         @relation(fields: [busId], references: [id])
+  bus           Bus             @relation(fields: [busId], references: [id])
   driverId      String?
-  driver        DriverProfile? @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  driver        DriverProfile?  @relation(fields: [driverId], references: [id], onDelete: SetNull)
   departureTime DateTime
   arrivalTime   DateTime
-  price         Decimal     @db.Decimal(10, 2)
-  status        TripStatus  @default(SCHEDULED)
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  price         Decimal         @db.Decimal(10, 2)
+  status        TripStatus      @default(SCHEDULED)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
 
-  seats    SeatInventory[]
-  bookings Booking[]
+  seats      SeatInventory[]
+  bookings   Booking[]
   foodOrders FoodOrder[]
-  payout    DriverTripPayout?
+  payout     DriverTripPayout?
 
   @@index([operatorId])
   @@index([routeId])
@@ -277,22 +312,30 @@ model SeatInventory {
 }
 
 model Booking {
-  id             String        @id @default(uuid())
-  tripId         String
-  trip           Trip          @relation(fields: [tripId], references: [id])
-  seatId         String
-  seat           SeatInventory @relation(fields: [seatId], references: [id])
-  passengerId    String
-  passenger      User          @relation(fields: [passengerId], references: [id])
-  passengerName  String
-  passengerPhone String
-  status         BookingStatus @default(PENDING)
-  totalAmount    Decimal       @db.Decimal(10, 2)
-  checkedInAt    DateTime?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  id                   String        @id @default(uuid())
+  tripId               String
+  trip                 Trip          @relation(fields: [tripId], references: [id])
+  seatId               String
+  seat                 SeatInventory @relation(fields: [seatId], references: [id])
+  passengerId          String
+  passenger            User          @relation(fields: [passengerId], references: [id])
+  passengerName        String
+  passengerPhone       String
+  status               BookingStatus @default(PENDING)
+  totalAmount          Decimal       @db.Decimal(10, 2)
+  couponCode           String?
+  discountAmount       Decimal       @default(0) @db.Decimal(10, 2)
+  originStopId         String?
+  originStop           RouteStop?    @relation("BookingOriginStop", fields: [originStopId], references: [id])
+  destinationStopId    String?
+  destinationStop      RouteStop?    @relation("BookingDestinationStop", fields: [destinationStopId], references: [id])
+  originStopOrder      Int?
+  destinationStopOrder Int?
+  checkedInAt          DateTime?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
 
-  payments  Payment[]
+  payments   Payment[]
   foodOrders FoodOrder[]
 
   @@index([tripId])
@@ -343,8 +386,8 @@ model Payment {
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 
-  refunds Refund[]
-  mismatches ReconciliationMismatch[]
+  refunds       Refund[]
+  mismatches    ReconciliationMismatch[]
   webhookEvents WebhookEvent[]
 
   @@index([bookingId])
@@ -367,14 +410,14 @@ model WebhookEvent {
 }
 
 model ReconciliationMismatch {
-  id           String   @id @default(uuid())
+  id           String    @id @default(uuid())
   paymentId    String
-  payment      Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  payment      Payment   @relation(fields: [paymentId], references: [id], onDelete: Cascade)
   localStatus  String
   remoteStatus String
-  resolved     Boolean  @default(false)
+  resolved     Boolean   @default(false)
   resolvedAt   DateTime?
-  createdAt    DateTime @default(now())
+  createdAt    DateTime  @default(now())
 
   @@index([resolved])
   @@index([createdAt])
@@ -384,6 +427,7 @@ enum NotificationChannel {
   SMS
   WHATSAPP
   EMAIL
+  PUSH
 }
 
 enum NotificationStatus {
@@ -395,21 +439,21 @@ enum NotificationStatus {
 }
 
 model Notification {
-  id            String               @id @default(uuid())
+  id            String              @id @default(uuid())
   userId        String
-  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   channel       NotificationChannel
   subject       String?
   body          String
-  status        NotificationStatus   @default(PENDING)
+  status        NotificationStatus  @default(PENDING)
   reference     String?
   referenceType String?
   sentAt        DateTime?
   deliveredAt   DateTime?
   failureReason String?
   metadata      Json?
-  createdAt     DateTime             @default(now())
-  updatedAt     DateTime             @updatedAt
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
 
   @@index([userId, createdAt(sort: Desc)])
   @@index([referenceType, reference])
@@ -417,18 +461,38 @@ model Notification {
 }
 
 model OtpCode {
-  id          String   @id @default(uuid())
+  id          String    @id @default(uuid())
   userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   code        String
   purpose     String
   expiresAt   DateTime
   usedAt      DateTime?
-  attempts    Int      @default(0)
-  maxAttempts Int      @default(5)
-  createdAt   DateTime @default(now())
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(5)
+  createdAt   DateTime  @default(now())
 
   @@index([userId, purpose])
+}
+
+enum DevicePlatform {
+  ANDROID
+  IOS
+}
+
+model DeviceToken {
+  id        String         @id @default(uuid())
+  userId    String
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String
+  platform  DevicePlatform @default(ANDROID)
+  isActive  Boolean        @default(true)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@unique([userId, token])
+  @@index([userId])
+  @@index([isActive])
 }
 
 model NotificationPreference {
@@ -451,22 +515,22 @@ model PlatformSetting {
 }
 
 model Refund {
-  id                String        @id @default(uuid())
+  id                String       @id @default(uuid())
   paymentId         String
-  payment           Payment       @relation(fields: [paymentId], references: [id])
-  amount            Decimal       @db.Decimal(10, 2)
+  payment           Payment      @relation(fields: [paymentId], references: [id])
+  amount            Decimal      @db.Decimal(10, 2)
   reason            String
-  status            RefundStatus  @default(REQUESTED)
+  status            RefundStatus @default(REQUESTED)
   requestedById     String
-  requestedBy       User          @relation("RefundRequestedBy", fields: [requestedById], references: [id])
+  requestedBy       User         @relation("RefundRequestedBy", fields: [requestedById], references: [id])
   approvedById      String?
-  approvedBy        User?         @relation("RefundApprovedBy", fields: [approvedById], references: [id])
+  approvedBy        User?        @relation("RefundApprovedBy", fields: [approvedById], references: [id])
   approvedAt        DateTime?
   processedAt       DateTime?
   paychanguRefundId String?
   failureReason     String?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
 
   @@index([paymentId])
   @@index([status])
@@ -474,20 +538,20 @@ model Refund {
 }
 
 model Settlement {
-  id             String            @id @default(uuid())
+  id             String           @id @default(uuid())
   operatorId     String?
-  operator       OperatorProfile?  @relation(fields: [operatorId], references: [id])
+  operator       OperatorProfile? @relation(fields: [operatorId], references: [id])
   vendorId       String?
-  vendor         VendorProfile?    @relation(fields: [vendorId], references: [id])
+  vendor         VendorProfile?   @relation(fields: [vendorId], references: [id])
   period         String
-  grossRevenue   Decimal           @db.Decimal(12, 2)
-  commissionRate Decimal           @db.Decimal(5, 4)
-  commissionAmt  Decimal           @db.Decimal(12, 2)
-  netPayout      Decimal           @db.Decimal(12, 2)
-  status         SettlementStatus  @default(PENDING)
+  grossRevenue   Decimal          @db.Decimal(12, 2)
+  commissionRate Decimal          @db.Decimal(5, 4)
+  commissionAmt  Decimal          @db.Decimal(12, 2)
+  netPayout      Decimal          @db.Decimal(12, 2)
+  status         SettlementStatus @default(PENDING)
   paidAt         DateTime?
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
 
   @@unique([operatorId, period])
   @@unique([vendorId, period])
@@ -504,18 +568,18 @@ enum FoodOrderStatus {
 }
 
 model DriverProfile {
-  id            String   @id @default(uuid())
-  userId        String   @unique
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id            String          @id @default(uuid())
+  userId        String          @unique
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   operatorId    String
   operator      OperatorProfile @relation(fields: [operatorId], references: [id], onDelete: Cascade)
   licenseNumber String?
   phone         String?
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
 
-  trips Trip[]
+  trips   Trip[]
   payouts DriverTripPayout[]
 
   @@index([operatorId])
@@ -523,20 +587,22 @@ model DriverProfile {
 }
 
 model FoodOrder {
-  id          String          @id @default(uuid())
-  bookingId   String
-  booking     Booking         @relation(fields: [bookingId], references: [id])
-  passengerId String
-  passenger   User            @relation(fields: [passengerId], references: [id])
-  tripId      String
-  trip        Trip            @relation(fields: [tripId], references: [id])
-  vendorId    String
-  vendor      VendorProfile   @relation(fields: [vendorId], references: [id])
-  status      FoodOrderStatus @default(PLACED)
-  totalAmount Decimal         @db.Decimal(10, 2)
-  note        String?
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  id             String          @id @default(uuid())
+  bookingId      String
+  booking        Booking         @relation(fields: [bookingId], references: [id])
+  passengerId    String
+  passenger      User            @relation(fields: [passengerId], references: [id])
+  tripId         String
+  trip           Trip            @relation(fields: [tripId], references: [id])
+  vendorId       String
+  vendor         VendorProfile   @relation(fields: [vendorId], references: [id])
+  status         FoodOrderStatus @default(PLACED)
+  totalAmount    Decimal         @db.Decimal(10, 2)
+  couponCode     String?
+  discountAmount Decimal         @default(0) @db.Decimal(10, 2)
+  note           String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 
   items FoodOrderItem[]
 
@@ -562,33 +628,83 @@ model FoodOrderItem {
 }
 
 model Rating {
-  id         String            @id @default(uuid())
+  id         String           @id @default(uuid())
   userId     String
-  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   entityType RatingEntityType
   entityId   String
   score      Int
   comment    String?
-  createdAt  DateTime          @default(now())
-  updatedAt  DateTime          @updatedAt
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
 
   @@unique([userId, entityType, entityId])
   @@index([entityType, entityId])
 }
 
 model DriverTripPayout {
-  id        String              @id @default(uuid())
+  id        String             @id @default(uuid())
   driverId  String
-  driver    DriverProfile       @relation(fields: [driverId], references: [id], onDelete: Cascade)
-  tripId    String              @unique
-  trip      Trip                @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  amount    Decimal             @db.Decimal(10, 2)
-  status    DriverPayoutStatus  @default(PENDING)
+  driver    DriverProfile      @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  tripId    String             @unique
+  trip      Trip               @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  amount    Decimal            @db.Decimal(10, 2)
+  status    DriverPayoutStatus @default(PENDING)
   paidAt    DateTime?
-  createdAt DateTime            @default(now())
-  updatedAt DateTime            @updatedAt
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
 
   @@unique([driverId, tripId])
   @@index([driverId])
   @@index([status])
+}
+
+model Coupon {
+  id           String             @id @default(uuid())
+  code         String             @unique
+  type         CouponType
+  value        Decimal            @db.Decimal(10, 2)
+  maxUses      Int                @default(0)
+  perUserUses  Int                @default(1)
+  validFrom    DateTime
+  validTo      DateTime
+  applicableTo CouponApplicableTo @default(BOTH)
+  minSpend     Decimal?           @db.Decimal(10, 2)
+  isActive     Boolean            @default(true)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  usages CouponUsage[]
+
+  @@index([applicableTo])
+  @@index([isActive])
+}
+
+model CouponUsage {
+  id             String   @id @default(uuid())
+  couponId       String
+  coupon         Coupon   @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contextType    String
+  contextId      String
+  discountAmount Decimal  @db.Decimal(10, 2)
+  createdAt      DateTime @default(now())
+
+  @@unique([couponId, userId, contextType, contextId])
+  @@index([userId])
+  @@index([contextType, contextId])
+}
+
+model Favorite {
+  id        String         @id @default(uuid())
+  userId    String
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dishId    String?
+  dish      Dish?          @relation(fields: [dishId], references: [id], onDelete: Cascade)
+  vendorId  String?
+  vendor    VendorProfile? @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  createdAt DateTime       @default(now())
+
+  @@index([userId])
 }

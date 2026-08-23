@@ -1,7 +1,16 @@
-import { Card, Col, Row, Statistic, Table, Typography } from 'antd';
+import { Card, Col, Row, Table } from 'antd';
 import { useQuery } from '@tanstack/react-query';
+import { ScheduleOutlined, CarOutlined, RocketOutlined } from '@ant-design/icons';
 import { Api } from '@foodiebus/api-client';
-import { formatMoney, formatDate, StatusBadge } from '@foodiebus/ui';
+import {
+  formatMoney,
+  formatDate,
+  StatCard,
+  EmptyState,
+  PageHeader,
+  colors,
+  StatusBadge,
+} from '@foodiebus/ui';
 import { http } from '../api.js';
 import { useAuth } from '@foodiebus/auth';
 
@@ -40,7 +49,7 @@ export function OperatorDashboard() {
       dataIndex: ['route'],
       key: 'route',
       render: (route: { fromCity: string; toCity: string }) =>
-        `${route.fromCity} → ${route.toCity}`,
+        `${route.fromCity} -> ${route.toCity}`,
     },
     {
       title: 'Departure',
@@ -59,34 +68,71 @@ export function OperatorDashboard() {
 
   return (
     <>
-      <Typography.Title level={3}>Operator Dashboard</Typography.Title>
+      <PageHeader title="Operator Dashboard" subtitle="Fleet &amp; trip operations overview" />
+      <Card style={{ marginBottom: 16, borderRadius: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: 12,
+              background: `${colors.primary}14`,
+              color: colors.primary,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 22,
+            }}
+          >
+            <CarOutlined />
+          </div>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 16 }}>
+              {profile?.businessName || 'Your business'}
+            </div>
+            <div style={{ fontSize: 13, color: colors.text.secondary }}>
+              {profile?.description || 'Welcome back, manage your fleet and trips below.'}
+            </div>
+          </div>
+        </div>
+      </Card>
       <Row gutter={[16, 16]}>
-        <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic title="Active trips" value={activeTrips.length} />
-          </Card>
+        <Col xs={24} sm={12} lg={8}>
+          <StatCard
+            title="Active trips"
+            value={activeTrips.length}
+            icon={<ScheduleOutlined />}
+            loading={!trips}
+            color={colors.primary}
+          />
         </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic title="Fleet size" value={fleetSize} />
-          </Card>
+        <Col xs={24} sm={12} lg={8}>
+          <StatCard
+            title="Fleet size"
+            value={fleetSize}
+            icon={<CarOutlined />}
+            loading={!buses}
+            color={colors.success}
+          />
         </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic
-              title="Scheduled trips"
-              value={ownTrips.filter((t) => t.status === 'SCHEDULED').length}
-            />
-          </Card>
+        <Col xs={24} sm={12} lg={8}>
+          <StatCard
+            title="Scheduled trips"
+            value={ownTrips.filter((t) => t.status === 'SCHEDULED').length}
+            icon={<RocketOutlined />}
+            loading={!trips}
+            color={colors.warning}
+          />
         </Col>
       </Row>
-      <Card title="Upcoming trips" style={{ marginTop: 16 }}>
+      <Card title="Upcoming trips" style={{ marginTop: 16, borderRadius: 12 }}>
         <Table
           rowKey="id"
           columns={columns}
           dataSource={activeTrips}
           pagination={false}
           loading={!trips}
+          locale={{ emptyText: <EmptyState title="No upcoming trips" /> }}
         />
       </Card>
     </>

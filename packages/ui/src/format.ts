@@ -27,3 +27,16 @@ export function formatDateOnly(iso: string | null | undefined): string {
     day: 'numeric',
   });
 }
+
+export function formatPercent(value: number | null | undefined, decimals = 1): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return '—';
+  return `${(value * 100).toFixed(decimals)}%`;
+}
+
+export function formatCompact(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return '—';
+  return new Intl.NumberFormat('en-MW', {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(value);
+}

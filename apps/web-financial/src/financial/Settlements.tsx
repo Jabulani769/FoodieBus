@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Button, Card, DatePicker, Form, Modal, Table, Typography, message } from 'antd';
+import { Button, Card, DatePicker, Form, Modal, Table, message } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Api, extractError } from '@foodiebus/api-client';
-import { formatMoney, StatusBadge } from '@foodiebus/ui';
+import { formatMoney, StatusBadge, EmptyState, PageHeader } from '@foodiebus/ui';
 import { http } from '../api.js';
 import type { Settlement } from '@foodiebus/types';
 
@@ -78,7 +78,7 @@ export function SettlementsPage() {
 
   return (
     <>
-      <Typography.Title level={3}>Settlements</Typography.Title>
+      <PageHeader title="Settlements" />
       <Card
         extra={
           <Button type="primary" onClick={() => setGenerateOpen(true)}>
@@ -86,7 +86,13 @@ export function SettlementsPage() {
           </Button>
         }
       >
-        <Table rowKey="id" columns={columns} dataSource={data?.items ?? []} loading={isLoading} />
+        <Table
+          rowKey="id"
+          columns={columns}
+          dataSource={data?.items ?? []}
+          loading={isLoading}
+          locale={{ emptyText: <EmptyState title="No settlements yet" /> }}
+        />
       </Card>
       <Modal
         title="Generate settlements"

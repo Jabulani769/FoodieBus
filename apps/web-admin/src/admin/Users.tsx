@@ -1,19 +1,8 @@
 import { useState } from 'react';
-import {
-  Button,
-  Card,
-  Input,
-  Popconfirm,
-  Select,
-  Space,
-  Table,
-  Tag,
-  Typography,
-  message,
-} from 'antd';
+import { Button, Card, Input, Popconfirm, Select, Space, Table, Tag, message } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Api, extractError } from '@foodiebus/api-client';
-import { formatDate } from '@foodiebus/ui';
+import { EmptyState, formatDate, PageHeader } from '@foodiebus/ui';
 import { http } from '../api.js';
 
 const api = new Api(http);
@@ -59,25 +48,47 @@ export function UsersPage() {
   });
 
   const columns = [
-    { title: 'Name', dataIndex: 'fullName', key: 'name' },
-    { title: 'Email', dataIndex: 'email', key: 'email' },
-    { title: 'Phone', dataIndex: 'phone', key: 'phone', render: (v: string | null) => v ?? '—' },
-    { title: 'Role', dataIndex: 'role', key: 'role', render: (v: string) => <Tag>{v}</Tag> },
+    { title: 'Name', dataIndex: 'fullName', key: 'name', width: 160, ellipsis: true },
+    {
+      title: 'Email',
+      dataIndex: 'email',
+      key: 'email',
+      width: 230,
+      ellipsis: true,
+    },
+    {
+      title: 'Phone',
+      dataIndex: 'phone',
+      key: 'phone',
+      width: 130,
+      ellipsis: true,
+      render: (v: string | null) => v ?? '—',
+    },
+    {
+      title: 'Role',
+      dataIndex: 'role',
+      key: 'role',
+      width: 110,
+      render: (v: string) => <Tag>{v}</Tag>,
+    },
     {
       title: 'Active',
       dataIndex: 'isActive',
       key: 'isActive',
+      width: 95,
       render: (v: boolean) => <Tag color={v ? 'green' : 'red'}>{v ? 'Active' : 'Inactive'}</Tag>,
     },
     {
       title: 'Created',
       dataIndex: 'createdAt',
       key: 'createdAt',
+      width: 170,
       render: (v: string) => formatDate(v),
     },
     {
       title: 'Actions',
       key: 'actions',
+      width: 170,
       render: (_: unknown, record: UserRow) => (
         <Space>
           <Button size="small" onClick={() => toggleStatus.mutate(record.id)}>
@@ -95,7 +106,7 @@ export function UsersPage() {
 
   return (
     <>
-      <Typography.Title level={3}>Users</Typography.Title>
+      <PageHeader title="Users" subtitle="Manage platform accounts and roles" />
       <Card
         title={
           <Space>
@@ -116,7 +127,22 @@ export function UsersPage() {
           </Space>
         }
       >
-        <Table rowKey="id" columns={columns} dataSource={data?.items ?? []} loading={isLoading} />
+        <Table
+          rowKey="id"
+          columns={columns}
+          dataSource={data?.items ?? []}
+          loading={isLoading}
+          tableLayout="fixed"
+          scroll={{ x: 'max-content' }}
+          locale={{
+            emptyText: (
+              <EmptyState
+                title="No users found"
+                description="Try adjusting the search or role filter."
+              />
+            ),
+          }}
+        />
       </Card>
     </>
   );

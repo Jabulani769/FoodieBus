@@ -25,7 +25,7 @@ export default function App() {
       <Route
         element={
           <AuthGuard>
-            <RoleGuard roles={['ADMIN']}>
+            <RoleGuard roles={['ADMIN', 'SUPER_ADMIN']}>
               <DashboardLayout />
             </RoleGuard>
           </AuthGuard>

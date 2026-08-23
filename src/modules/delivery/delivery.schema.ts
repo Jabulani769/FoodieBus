@@ -20,6 +20,12 @@ export const placeFoodOrderSchema = z.object({
       )
       .min(1, 'At least one item is required'),
     note: z.string().max(300).optional(),
+    couponCode: z
+      .string()
+      .min(1)
+      .max(50)
+      .transform((s) => s.trim().toUpperCase())
+      .optional(),
   }),
 });
 

@@ -1,7 +1,7 @@
-import { Card, Table, Typography } from 'antd';
+import { Card, Table } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { Api } from '@foodiebus/api-client';
-import { formatMoney, StatusBadge } from '@foodiebus/ui';
+import { formatMoney, StatusBadge, EmptyState, PageHeader } from '@foodiebus/ui';
 import { http } from '../api.js';
 import { useAuth } from '@foodiebus/auth';
 
@@ -53,13 +53,14 @@ export function PayoutsPage() {
 
   return (
     <>
-      <Typography.Title level={3}>Payouts &amp; Settlements</Typography.Title>
+      <PageHeader title="Payouts &amp; Settlements" />
       <Card>
         <Table
           rowKey="id"
           columns={columns}
           dataSource={settlements?.items ?? []}
           loading={isLoading}
+          locale={{ emptyText: <EmptyState title="No payouts yet" /> }}
         />
       </Card>
     </>

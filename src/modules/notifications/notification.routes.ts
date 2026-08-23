@@ -3,8 +3,10 @@ import { notificationService } from './notification.service.js';
 import { authenticate } from '../../shared/middleware/index.js';
 import { AppError } from '../../shared/errors/AppError.js';
 import {
+  deviceTokenParamsSchema,
   listNotificationsSchema,
   notificationParamsSchema,
+  registerDeviceTokenSchema,
   updatePreferenceSchema,
 } from './notification.schema.js';
 
@@ -145,6 +147,74 @@ export async function registerNotificationRoutes(app: FastifyInstance): Promise<
       const user = requireUser(request);
       const body = updatePreferenceSchema.parse({ body: request.body }).body;
       return reply.send(await notificationService.updatePreference(user.id, body));
+    },
+  );
+
+  app.post(
+    '/notifications/devices',
+    {
+      preHandler: [authenticate],
+      schema: {
+        tags: ['notifications'],
+        summary: 'Register a push device token',
+        security: [{ bearerAuth: [] }],
+        body: {
+          type: 'object',
+          properties: {
+            token: { type: 'string' },
+            platform: { type: 'string', enum: ['ANDROID', 'IOS'], default: 'ANDROID' },
+          },
+          required: ['token'],
+        },
+        response: { 201: { type: 'object', properties: { id: { type: 'string' } } } },
+      },
+    },
+    async (request: FastifyRequest, reply) => {
+      const user = requireUser(request);
+      const body = registerDeviceTokenSchema.parse({ body: request.body }).body;
+      const device = await notificationService.registerDeviceToken(
+        user.id,
+        body.token,
+        body.platform,
+      );
+      return reply.code(201).send(device);
+    },
+  );
+
+  app.get(
+    '/notifications/devices',
+    {
+      preHandler: [authenticate],
+      schema: {
+        tags: ['notifications'],
+        summary: 'List my push device tokens',
+        security: [{ bearerAuth: [] }],
+        response: { 200: { type: 'object', properties: { items: { type: 'array' } } } },
+      },
+    },
+    async (request: FastifyRequest, reply) => {
+      const user = requireUser(request);
+      return reply.send(await notificationService.listDeviceTokens(user.id));
+    },
+  );
+
+  app.delete(
+    '/notifications/devices/:id',
+    {
+      preHandler: [authenticate],
+      schema: {
+        tags: ['notifications'],
+        summary: 'Remove a push device token',
+        security: [{ bearerAuth: [] }],
+        params: { type: 'object', properties: { id: { type: 'string' } } },
+        response: { 204: { type: 'null' } },
+      },
+    },
+    async (request: FastifyRequest, reply) => {
+      const user = requireUser(request);
+      const { id } = deviceTokenParamsSchema.parse(request).params;
+      await notificationService.removeDeviceToken(id, user.id);
+      return reply.code(204).send();
     },
   );
 }

@@ -11,7 +11,6 @@ import {
   Space,
   Switch,
   Table,
-  Typography,
   message,
 } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
@@ -19,6 +18,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Api } from '@foodiebus/api-client';
 import { extractError } from '@foodiebus/api-client';
 import { http } from '../api.js';
+import { EmptyState, PageHeader } from '@foodiebus/ui';
 import { useAuth } from '@foodiebus/auth';
 
 const api = new Api(http);
@@ -126,7 +126,7 @@ export function BusesPage() {
 
   return (
     <>
-      <Typography.Title level={3}>Bus Fleet</Typography.Title>
+      <PageHeader title="Bus Fleet" />
       <Card
         extra={
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
@@ -134,7 +134,13 @@ export function BusesPage() {
           </Button>
         }
       >
-        <Table rowKey="id" columns={columns} dataSource={buses?.items ?? []} loading={isLoading} />
+        <Table
+          rowKey="id"
+          columns={columns}
+          dataSource={buses?.items ?? []}
+          loading={isLoading}
+          locale={{ emptyText: <EmptyState title="No buses yet" /> }}
+        />
       </Card>
       <Modal
         title={editing ? 'Edit bus' : 'New bus'}

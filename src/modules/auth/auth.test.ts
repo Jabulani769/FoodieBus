@@ -19,6 +19,10 @@ describe('auth module', () => {
 
   beforeEach(async () => {
     await prisma.rating.deleteMany();
+    await prisma.deviceToken.deleteMany();
+    await prisma.favorite.deleteMany();
+    await prisma.couponUsage.deleteMany();
+    await prisma.coupon.deleteMany();
     await prisma.webhookEvent.deleteMany();
 
     await prisma.reconciliationMismatch.deleteMany();
@@ -261,6 +265,56 @@ describe('auth module', () => {
         },
       });
       expect(res.statusCode).toBe(403);
+    });
+
+    it('returns 409 when the email is already taken', async () => {
+      await createTestUser({
+        role: 'SUPER_ADMIN',
+        email: 'admin@foodiebus.mw',
+        phone: '+265991888000',
+      });
+      await createTestUser({ email: 'dup@foodiebus.mw', phone: '+265991888001' });
+      const login = await loginAs('admin@foodiebus.mw', 'password123');
+      const { accessToken } = login.json();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/v1/users',
+        headers: { authorization: `Bearer ${accessToken}` },
+        payload: {
+          email: 'dup@foodiebus.mw',
+          phone: '+265991999999',
+          password: 'password123',
+          fullName: 'Duplicate',
+          role: 'STUDENT',
+        },
+      });
+      expect(res.statusCode).toBe(409);
+    });
+
+    it('returns 409 when the phone is already taken', async () => {
+      await createTestUser({
+        role: 'SUPER_ADMIN',
+        email: 'admin@foodiebus.mw',
+        phone: '+265991888002',
+      });
+      await createTestUser({ email: 'phone-owner@foodiebus.mw', phone: '+265991777001' });
+      const login = await loginAs('admin@foodiebus.mw', 'password123');
+      const { accessToken } = login.json();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/v1/users',
+        headers: { authorization: `Bearer ${accessToken}` },
+        payload: {
+          email: 'someone-else@foodiebus.mw',
+          phone: '+265991777001',
+          password: 'password123',
+          fullName: 'Duplicate',
+          role: 'STUDENT',
+        },
+      });
+      expect(res.statusCode).toBe(409);
     });
 
     it('rejects a request with no token', async () => {

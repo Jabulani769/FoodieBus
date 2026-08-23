@@ -1,7 +1,7 @@
-import { Button, Card, Table, Tag, Typography, message } from 'antd';
+import { Button, Card, Table, Tag, message } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Api, extractError } from '@foodiebus/api-client';
-import { formatDate } from '@foodiebus/ui';
+import { formatDate, EmptyState, PageHeader } from '@foodiebus/ui';
 import { http } from '../api.js';
 import type { ReconciliationMismatch } from '@foodiebus/types';
 
@@ -59,9 +59,22 @@ export function ReconciliationPage() {
 
   return (
     <>
-      <Typography.Title level={3}>Reconciliation</Typography.Title>
+      <PageHeader title="Reconciliation" />
       <Card>
-        <Table rowKey="id" columns={columns} dataSource={data?.items ?? []} loading={isLoading} />
+        <Table
+          rowKey="id"
+          columns={columns}
+          dataSource={data?.items ?? []}
+          loading={isLoading}
+          locale={{
+            emptyText: (
+              <EmptyState
+                title="All payments reconciled"
+                description="No payment mismatches detected."
+              />
+            ),
+          }}
+        />
       </Card>
     </>
   );

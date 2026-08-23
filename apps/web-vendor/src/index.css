@@ -10,30 +10,224 @@ body,
   height: 100%;
   font-family:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background: #f5f7fa;
 }
 
-.ant-layout {
-  min-height: 100vh;
+.app-shell {
+  height: 100vh;
+  overflow: hidden;
+}
+
+.sidebar-sider {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.sidebar-brand {
+  height: 64px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.sidebar-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #1677ff 0%, #0958d9 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.sidebar-name {
+  color: #f1f5f9;
+  font-weight: 700;
+  font-size: 17px;
+  white-space: nowrap;
+}
+
+.sidebar-menu-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 12px;
+}
+
+.sidebar-footer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.sidebar-user {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.header-title {
+  display: flex;
+  align-items: baseline;
+}
+
+.app-main {
+  height: 100vh;
+  overflow: hidden;
+}
+
+.app-main .app-header {
+  flex-shrink: 0;
+}
+
+.app-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.ant-menu-dark .ant-menu-item-selected,
+.ant-menu-dark > .ant-menu .ant-menu-item-selected {
+  background: linear-gradient(90deg, #2563eb, #1d4ed8);
+  color: #fff;
+  font-weight: 500;
+}
+
+.ant-menu-dark .ant-menu-item-selected .anticon {
+  color: #fff;
 }
 
 .auth-layout {
   min-height: 100vh;
   display: flex;
+}
+
+.auth-left {
+  flex: 1.1;
+  background: linear-gradient(135deg, #1677ff 0%, #0958d9 60%, #0b3fa8 100%);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 64px;
+  position: relative;
+  overflow: hidden;
+}
+
+.auth-left::after {
+  content: '';
+  position: absolute;
+  right: -80px;
+  bottom: -80px;
+  width: 320px;
+  height: 320px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.auth-left::before {
+  content: '';
+  position: absolute;
+  left: -60px;
+  top: -60px;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.auth-brand-logo {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.2);
+  display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #1677ff 0%, #0958d9 100%);
+  font-size: 26px;
 }
 
-.auth-card {
-  width: 380px;
-  max-width: 92vw;
-  border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+.auth-brand-name {
+  font-size: 24px;
+  font-weight: 700;
 }
 
-.auth-title {
-  text-align: center;
-  margin-bottom: 24px;
-  font-weight: 600;
-  color: #1677ff;
+.auth-tagline {
+  font-size: 18px;
+  opacity: 0.9;
+  max-width: 360px;
+  line-height: 1.6;
+  position: relative;
+  z-index: 1;
+}
+
+.auth-features {
+  margin-top: 32px;
+  position: relative;
+  z-index: 1;
+}
+
+.auth-feature {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  opacity: 0.95;
+  font-size: 14px;
+}
+
+.auth-right {
+  flex: 1;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+}
+
+.auth-form-wrap {
+  width: 100%;
+  max-width: 360px;
+}
+
+.auth-form-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1f2329;
+  margin-bottom: 4px;
+}
+
+.auth-form-subtitle {
+  color: #667085;
+  font-size: 14px;
+  margin-bottom: 28px;
+}
+
+@media (max-width: 900px) {
+  .auth-left {
+    display: none;
+  }
+  .auth-right {
+    padding: 24px;
+  }
 }
