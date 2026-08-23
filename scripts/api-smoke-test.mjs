@@ -195,7 +195,7 @@ step('validate coupon', validate.status === 200, `GET /coupons/:code/validate ($
 
 // ---- 8. Favorites (Phase 5.5) ----
 const vendorEmail = `smoke-vendor-${suffix}@foodiebus.mw`;
-const createdVendor = await api('POST', '/users', {
+await api('POST', '/users', {
   token: adminToken,
   body: mkUser(vendorEmail, `+26599${Math.floor(100000 + Math.random() * 900000)}`, 'VENDOR', 'Smoke Vendor'),
 });

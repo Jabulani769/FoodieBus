@@ -41,4 +41,22 @@ export default tseslint.config(
     },
   },
   prettier,
+  {
+    files: ['**/*.mjs'],
+    languageOptions: {
+      globals: {
+        process: 'readonly',
+        console: 'readonly',
+        fetch: 'readonly',
+        Buffer: 'readonly',
+        setInterval: 'readonly',
+        setTimeout: 'readonly',
+        clearInterval: 'readonly',
+        clearTimeout: 'readonly',
+        URL: 'readonly',
+        URLSearchParams: 'readonly',
+        __dirname: 'readonly',
+      },
+    },
+  },
 );
