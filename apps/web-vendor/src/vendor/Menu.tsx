@@ -2,7 +2,9 @@ import { useState } from 'react';
 import {
   Button,
   Card,
+  Descriptions,
   Form,
+  Image,
   Input,
   InputNumber,
   Modal,
@@ -11,24 +13,37 @@ import {
   Space,
   Switch,
   Table,
+  Tag,
   Upload,
   message,
 } from 'antd';
-import { PlusOutlined, UploadOutlined } from '@ant-design/icons';
+import { PictureOutlined, PlusOutlined, UploadOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Api } from '@foodiebus/api-client';
 import { extractError } from '@foodiebus/api-client';
-import { formatMoney, EmptyState, PageHeader } from '@foodiebus/ui';
+import { colors, formatMoney, EmptyState, PageHeader } from '@foodiebus/ui';
 import { http } from '../api.js';
 import { useAuth } from '@foodiebus/auth';
 
 const api = new Api(http);
+
+type DishRow = {
+  id: string;
+  name: string;
+  description?: string;
+  price: string;
+  imageUrl?: string;
+  isAvailable: boolean;
+  category?: { name?: string };
+  rating?: { average: number; count: number };
+};
 
 export function MenuPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<{ id: string } | null>(null);
+  const [viewing, setViewing] = useState<DishRow | null>(null);
   const [form] = Form.useForm();
 
   const { data: profile } = useQuery({
@@ -119,35 +134,73 @@ export function MenuPage() {
   };
 
   const columns = [
-    { title: 'Name', dataIndex: 'name', key: 'name' },
+    {
+      title: 'Image',
+      dataIndex: 'imageUrl',
+      key: 'imageUrl',
+      width: 72,
+      render: (url: string) =>
+        url ? (
+          <Image
+            src={url}
+            width={48}
+            height={48}
+            preview={false}
+            style={{ objectFit: 'cover', borderRadius: 8 }}
+          />
+        ) : (
+          <div
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: 8,
+              background: colors.bg.app,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: colors.text.tertiary,
+            }}
+          >
+            <PictureOutlined />
+          </div>
+        ),
+    },
+    {
+      title: 'Name',
+      dataIndex: 'name',
+      key: 'name',
+      render: (name: string, record: DishRow) => (
+        <Button
+          type="link"
+          style={{ padding: 0, height: 'auto' }}
+          onClick={() => setViewing(record)}
+        >
+          {name}
+        </Button>
+      ),
+    },
     { title: 'Category', dataIndex: ['category', 'name'], key: 'category' },
     { title: 'Price', dataIndex: 'price', key: 'price', render: (v: string) => formatMoney(v) },
     {
       title: 'Available',
       dataIndex: 'isAvailable',
       key: 'isAvailable',
-      render: (v: boolean, record: { id: string }) => (
-        <Switch
-          checked={v}
-          onChange={(checked) => toggleAvailability.mutate({ id: record.id, isAvailable: checked })}
-        />
+      render: (v: boolean, record: DishRow) => (
+        <span onClick={(e) => e.stopPropagation()}>
+          <Switch
+            checked={v}
+            onChange={(checked) =>
+              toggleAvailability.mutate({ id: record.id, isAvailable: checked })
+            }
+          />
+        </span>
       ),
     },
     {
       title: 'Actions',
       key: 'actions',
-      render: (
-        _: unknown,
-        record: {
-          id: string;
-          name: string;
-          description?: string;
-          price: string;
-          categoryId?: string;
-          imageUrl?: string;
-        },
-      ) => (
-        <Space>
+      render: (_: unknown, record: DishRow) => (
+        <Space onClick={(e) => e.stopPropagation()}>
           <Button size="small" onClick={() => openEdit(record)}>
             Edit
           </Button>
@@ -165,7 +218,7 @@ export function MenuPage() {
     <>
       <PageHeader
         title="Menu Management"
-        subtitle="Manage dishes available on board"
+        subtitle="Manage dishes available on board — click a dish to view its details"
         extra={
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
             New dish
@@ -178,6 +231,7 @@ export function MenuPage() {
           columns={columns}
           dataSource={dishes?.items ?? []}
           loading={isLoading}
+          onRow={(record) => ({ onClick: () => setViewing(record as DishRow) })}
           locale={{ emptyText: <EmptyState title="No dishes yet" /> }}
         />
       </Card>
@@ -233,6 +287,73 @@ export function MenuPage() {
             </Upload>
           </Form.Item>
         </Form>
+      </Modal>
+
+      <Modal
+        title={viewing?.name}
+        open={!!viewing}
+        onCancel={() => setViewing(null)}
+        footer={[
+          <Button key="close" onClick={() => setViewing(null)}>
+            Close
+          </Button>,
+          <Button
+            key="edit"
+            type="primary"
+            onClick={() => {
+              const current = viewing;
+              setViewing(null);
+              if (current) openEdit(current);
+            }}
+          >
+            Edit
+          </Button>,
+        ]}
+      >
+        {viewing && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {viewing.imageUrl ? (
+              <Image
+                src={viewing.imageUrl}
+                style={{ borderRadius: 12, maxHeight: 260, width: '100%', objectFit: 'cover' }}
+              />
+            ) : (
+              <div
+                style={{
+                  height: 180,
+                  borderRadius: 12,
+                  background: colors.bg.app,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: colors.text.tertiary,
+                  fontSize: 32,
+                }}
+              >
+                <PictureOutlined />
+              </div>
+            )}
+            <Descriptions column={1} size="small" bordered>
+              <Descriptions.Item label="Category">
+                {viewing.category?.name ?? '—'}
+              </Descriptions.Item>
+              <Descriptions.Item label="Price">{formatMoney(viewing.price)}</Descriptions.Item>
+              <Descriptions.Item label="Status">
+                <Tag color={viewing.isAvailable ? 'green' : 'red'}>
+                  {viewing.isAvailable ? 'Available' : 'Unavailable'}
+                </Tag>
+              </Descriptions.Item>
+              {viewing.rating && (
+                <Descriptions.Item label="Rating">
+                  {viewing.rating.average.toFixed(1)} ({viewing.rating.count})
+                </Descriptions.Item>
+              )}
+            </Descriptions>
+            <div style={{ color: colors.text.secondary, fontSize: 14, whiteSpace: 'pre-wrap' }}>
+              {viewing.description || 'No description provided.'}
+            </div>
+          </div>
+        )}
       </Modal>
     </>
   );
