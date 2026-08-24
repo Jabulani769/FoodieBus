@@ -1,5 +1,17 @@
 import { useState } from 'react';
-import { Button, Card, Input, Popconfirm, Select, Space, Table, Tag, message } from 'antd';
+import {
+  Button,
+  Card,
+  Form,
+  Input,
+  Modal,
+  Popconfirm,
+  Select,
+  Space,
+  Table,
+  Tag,
+  message,
+} from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Api, extractError } from '@foodiebus/api-client';
 import { EmptyState, formatDate, PageHeader } from '@foodiebus/ui';
@@ -8,6 +20,8 @@ import { http } from '../api.js';
 const api = new Api(http);
 
 const ROLES = ['STUDENT', 'VENDOR', 'OPERATOR', 'DRIVER', 'FINANCIAL', 'ADMIN', 'SUPER_ADMIN'];
+// Roles an admin is allowed to create directly (matches the backend POST /users enum).
+const CREATE_ROLES = ['STUDENT', 'VENDOR', 'OPERATOR', 'FINANCIAL', 'ADMIN', 'SUPER_ADMIN'];
 
 type UserRow = {
   id: string;
@@ -23,10 +37,29 @@ export function UsersPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [role, setRole] = useState<string | undefined>(undefined);
+  const [open, setOpen] = useState(false);
+  const [form] = Form.useForm();
 
   const { data, isLoading } = useQuery({
     queryKey: ['users', search, role],
     queryFn: () => api.listUsers({ limit: 100, search: search || undefined, role }),
+  });
+
+  const createUser = useMutation({
+    mutationFn: (input: {
+      email: string;
+      phone: string;
+      fullName: string;
+      password: string;
+      role: string;
+    }) => api.createUser(input),
+    onSuccess: () => {
+      message.success('User created');
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      setOpen(false);
+      form.resetFields();
+    },
+    onError: (err) => message.error(extractError(err).message),
   });
 
   const toggleStatus = useMutation({
@@ -124,6 +157,9 @@ export function UsersPage() {
               onChange={setRole}
               options={ROLES.map((r) => ({ label: r, value: r }))}
             />
+            <Button type="primary" onClick={() => setOpen(true)}>
+              Create User
+            </Button>
           </Space>
         }
       >
@@ -144,6 +180,59 @@ export function UsersPage() {
           }}
         />
       </Card>
+
+      <Modal
+        title="Create User"
+        open={open}
+        onCancel={() => setOpen(false)}
+        onOk={() => form.submit()}
+        confirmLoading={createUser.isPending}
+        destroyOnClose
+        okText="Create"
+      >
+        <Form form={form} layout="vertical" onFinish={(v) => createUser.mutate(v)}>
+          <Form.Item
+            name="fullName"
+            label="Full Name"
+            rules={[{ required: true, message: 'Full name is required' }]}
+          >
+            <Input placeholder="Jane Doe" />
+          </Form.Item>
+          <Form.Item
+            name="email"
+            label="Email"
+            rules={[{ required: true, type: 'email', message: 'Valid email is required' }]}
+          >
+            <Input placeholder="user@foodiebus.mw" />
+          </Form.Item>
+          <Form.Item
+            name="phone"
+            label="Phone"
+            rules={[
+              { required: true, pattern: /^\+?\d{9,15}$/, message: 'Valid phone is required' },
+            ]}
+          >
+            <Input placeholder="+26599..." />
+          </Form.Item>
+          <Form.Item
+            name="password"
+            label="Password"
+            rules={[{ required: true, min: 8, message: 'Password must be at least 8 characters' }]}
+          >
+            <Input.Password placeholder="Minimum 8 characters" />
+          </Form.Item>
+          <Form.Item
+            name="role"
+            label="Role"
+            rules={[{ required: true, message: 'Role is required' }]}
+          >
+            <Select
+              placeholder="Select role"
+              options={CREATE_ROLES.map((r) => ({ label: r, value: r }))}
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
     </>
   );
 }
