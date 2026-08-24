@@ -344,6 +344,14 @@ export async function registerFoodRoutes(app: FastifyInstance): Promise<void> {
                     price: { type: 'string' },
                     imageUrl: { type: 'string' },
                     isAvailable: { type: 'boolean' },
+                    category: {
+                      type: 'object',
+                      properties: {
+                        id: { type: 'string' },
+                        name: { type: 'string' },
+                        slug: { type: 'string' },
+                      },
+                    },
                   },
                 },
               },
