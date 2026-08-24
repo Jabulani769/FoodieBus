@@ -33,6 +33,17 @@ import { unwrap, type ApiClientError } from './http.js';
 export { createHttpClient, extractError } from './http.js';
 export type { ApiClientError, ApiError, TokenStore, ClientOptions } from './http.js';
 
+export interface NotificationItem {
+  id: string;
+  channel?: string | null;
+  subject?: string | null;
+  body: string;
+  status?: string | null;
+  reference?: string | null;
+  referenceType?: string | null;
+  createdAt: string;
+}
+
 export class Api {
   constructor(public readonly http: AxiosInstance) {}
 
@@ -656,5 +667,21 @@ export class Api {
 
   async refundSummary(from: string, to: string): Promise<unknown> {
     return unwrap(await this.http.get('/analytics/refunds/summary', { params: { from, to } }));
+  }
+
+  // ---- Notifications ----
+  async getMyNotifications(
+    page = 1,
+    limit = 20,
+  ): Promise<{ items: NotificationItem[]; total: number }> {
+    return unwrap(
+      await this.http.get<{ items: NotificationItem[]; total: number }>('/notifications/me', {
+        params: { page, limit },
+      }),
+    );
+  }
+
+  async markNotificationRead(id: string): Promise<{ id: string }> {
+    return unwrap(await this.http.patch<{ id: string }>(`/notifications/${id}/read`));
   }
 }

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Layout, Menu, Dropdown, Button, Space, Avatar, Typography, Badge } from 'antd';
+import { Layout, Menu, Dropdown, Button, Space, Avatar, Typography } from 'antd';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   UserOutlined,
@@ -10,12 +10,14 @@ import {
   TagsOutlined,
   FileSearchOutlined,
   SettingOutlined,
-  BellOutlined,
 } from '@ant-design/icons';
+import { Api } from '@foodiebus/api-client';
+import { http } from '../api.js';
 import { useAuth } from '@foodiebus/auth';
-import { colors, brand } from '@foodiebus/ui';
+import { colors, brand, NotificationBell } from '@foodiebus/ui';
 
 const { Sider, Header, Content } = Layout;
+const api = new Api(http);
 
 const TITLES: Record<string, string> = {
   '/': 'Dashboard',
@@ -147,15 +149,7 @@ export function DashboardLayout() {
             </span>
           </div>
           <Space size="middle">
-            <Button
-              type="text"
-              shape="circle"
-              icon={
-                <Badge dot offset={[-6, 6]}>
-                  <BellOutlined />
-                </Badge>
-              }
-            />
+            <NotificationBell api={api} />
             <Dropdown
               menu={{
                 items: [
