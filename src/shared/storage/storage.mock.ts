@@ -24,7 +24,9 @@ export class MockStorageProvider implements StorageProvider {
     const filePath = this.filePath(params.key);
     await mkdir(resolve(filePath, '..'), { recursive: true });
     await pipeline(params.body, createWriteStream(filePath));
-    return { url: `http://${env.HOST}:${env.PORT}/uploads/${params.key}` };
+    const base =
+      env.PUBLIC_URL ?? process.env.RENDER_EXTERNAL_URL ?? `http://${env.HOST}:${env.PORT}`;
+    return { url: `${base}/uploads/${params.key}` };
   }
 
   async delete(key: string): Promise<void> {

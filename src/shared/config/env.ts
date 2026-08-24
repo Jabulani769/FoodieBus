@@ -63,6 +63,7 @@ const envSchema = z.object({
   STORAGE_S3_SECRET_ACCESS_KEY: z.string().optional(),
   STORAGE_S3_ENDPOINT: z.string().url().optional(),
   STORAGE_S3_PUBLIC_BASE_URL: z.string().url().optional(),
+  PUBLIC_URL: z.string().url().optional(),
   STORAGE_MAX_SIZE_MB: z.coerce.number().int().min(1).default(5),
   STORAGE_ALLOWED_TYPES: z.string().default('image/jpeg,image/png,image/webp'),
 
