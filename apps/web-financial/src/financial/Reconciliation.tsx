@@ -1,7 +1,7 @@
-import { Button, Card, Table, Tag, message } from 'antd';
+import { Button, Card, Table, message } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Api, extractError } from '@foodiebus/api-client';
-import { formatDate, EmptyState, PageHeader } from '@foodiebus/ui';
+import { formatDate, StatusBadge, EmptyState, PageHeader } from '@foodiebus/ui';
 import { http } from '../api.js';
 import type { ReconciliationMismatch } from '@foodiebus/types';
 
@@ -37,7 +37,7 @@ export function ReconciliationPage() {
       title: 'Resolved',
       dataIndex: 'resolved',
       key: 'resolved',
-      render: (v: boolean) => <Tag color={v ? 'green' : 'red'}>{v ? 'Resolved' : 'Open'}</Tag>,
+      render: (v: boolean) => <StatusBadge status={v ? 'RESOLVED' : 'OPEN'} />,
     },
     {
       title: 'Detected',
@@ -59,7 +59,7 @@ export function ReconciliationPage() {
 
   return (
     <>
-      <PageHeader title="Reconciliation" />
+      <PageHeader title="Reconciliation" subtitle="Reconcile payments against the ledger" />
       <Card>
         <Table
           rowKey="id"

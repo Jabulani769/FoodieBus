@@ -82,7 +82,7 @@ export function RevenuePage() {
 
   return (
     <>
-      <PageHeader title="Revenue Reports" />
+      <PageHeader title="Revenue Reports" subtitle="Detailed revenue breakdown and trends" />
       <RangePicker
         style={{ marginBottom: 16 }}
         value={range}

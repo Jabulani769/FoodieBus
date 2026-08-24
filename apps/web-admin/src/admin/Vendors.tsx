@@ -1,7 +1,7 @@
-import { Button, Card, Table, Tag, message } from 'antd';
+import { Button, Card, Table, message } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Api, extractError } from '@foodiebus/api-client';
-import { formatDate, EmptyState, PageHeader } from '@foodiebus/ui';
+import { formatDate, StatusBadge, EmptyState, PageHeader } from '@foodiebus/ui';
 import { http } from '../api.js';
 
 const api = new Api(http);
@@ -46,7 +46,7 @@ export function VendorsPage() {
       dataIndex: 'isActive',
       key: 'isActive',
       width: 100,
-      render: (v: boolean) => <Tag color={v ? 'green' : 'red'}>{v ? 'Active' : 'Inactive'}</Tag>,
+      render: (v: boolean) => <StatusBadge status={v ? 'ACTIVE' : 'INACTIVE'} />,
     },
     {
       title: 'Registered',

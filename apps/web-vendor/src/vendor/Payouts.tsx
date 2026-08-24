@@ -53,7 +53,7 @@ export function PayoutsPage() {
 
   return (
     <>
-      <PageHeader title="Payouts &amp; Settlements" />
+      <PageHeader title="Payouts &amp; Settlements" subtitle="Your earnings and payout history" />
       <Card>
         <Table
           rowKey="id"

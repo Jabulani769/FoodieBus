@@ -78,7 +78,7 @@ export function SettlementsPage() {
 
   return (
     <>
-      <PageHeader title="Settlements" />
+      <PageHeader title="Settlements" subtitle="Operator and vendor settlement statements" />
       <Card
         extra={
           <Button type="primary" onClick={() => setGenerateOpen(true)}>

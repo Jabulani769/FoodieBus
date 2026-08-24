@@ -146,7 +146,7 @@ export function OrdersPage() {
 
   return (
     <>
-      <PageHeader title="Orders" />
+      <PageHeader title="Orders" subtitle="Track and fulfill food orders" />
       <Card
         title={
           <Space>

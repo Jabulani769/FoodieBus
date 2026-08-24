@@ -14,7 +14,7 @@ import {
 } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Api, extractError } from '@foodiebus/api-client';
-import { EmptyState, formatDate, PageHeader } from '@foodiebus/ui';
+import { EmptyState, formatDate, StatusBadge, PageHeader } from '@foodiebus/ui';
 import { http } from '../api.js';
 
 const api = new Api(http);
@@ -109,7 +109,7 @@ export function UsersPage() {
       dataIndex: 'isActive',
       key: 'isActive',
       width: 95,
-      render: (v: boolean) => <Tag color={v ? 'green' : 'red'}>{v ? 'Active' : 'Inactive'}</Tag>,
+      render: (v: boolean) => <StatusBadge status={v ? 'ACTIVE' : 'INACTIVE'} />,
     },
     {
       title: 'Created',

@@ -102,7 +102,7 @@ export function RefundsPage() {
 
   return (
     <>
-      <PageHeader title="Refunds" />
+      <PageHeader title="Refunds" subtitle="Track and process customer refunds" />
       <Card
         title={
           <Select

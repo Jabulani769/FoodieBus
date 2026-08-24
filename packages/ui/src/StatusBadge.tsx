@@ -30,6 +30,8 @@ const STATUS_COLORS: Record<string, string> = {
   // Generic
   ACTIVE: 'green',
   INACTIVE: 'default',
+  RESOLVED: 'green',
+  OPEN: 'orange',
 };
 
 export function StatusBadge({ status }: { status: string }) {

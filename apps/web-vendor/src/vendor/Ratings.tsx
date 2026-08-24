@@ -54,7 +54,7 @@ export function VendorRatings() {
 
   return (
     <>
-      <PageHeader title="Ratings &amp; Reviews" />
+      <PageHeader title="Ratings &amp; Reviews" subtitle="See what passengers think" />
       {avg && (
         <Card style={{ marginBottom: 16 }}>
           <Typography.Text strong style={{ marginRight: 8 }}>

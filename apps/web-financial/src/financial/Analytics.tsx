@@ -76,7 +76,7 @@ export function AnalyticsPage() {
 
   return (
     <>
-      <PageHeader title="Platform Analytics" />
+      <PageHeader title="Platform Analytics" subtitle="Key metrics across the platform" />
       <RangePicker
         style={{ marginBottom: 16 }}
         value={range}

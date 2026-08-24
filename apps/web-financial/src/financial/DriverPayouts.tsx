@@ -53,7 +53,7 @@ export function DriverPayoutsPage() {
 
   return (
     <>
-      <PageHeader title="Driver Payouts" />
+      <PageHeader title="Driver Payouts" subtitle="Manage driver earnings and payouts" />
       <Card>
         <Table
           rowKey="id"
