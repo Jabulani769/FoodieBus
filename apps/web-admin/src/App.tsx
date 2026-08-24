@@ -10,6 +10,7 @@ import { OperatorsPage } from './admin/Operators.js';
 import { CategoriesPage } from './admin/Categories.js';
 import { AuditLogsPage } from './admin/AuditLogs.js';
 import { SettingsPage } from './admin/Settings.js';
+import { ProfilePage } from './pages/Profile.js';
 
 function RootRedirect() {
   const { user, isAuthenticated } = useAuth();
@@ -38,6 +39,7 @@ export default function App() {
         <Route path="/categories" element={<CategoriesPage />} />
         <Route path="/audit-logs" element={<AuditLogsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
       </Route>
       <Route path="*" element={<RootRedirect />} />
     </Routes>

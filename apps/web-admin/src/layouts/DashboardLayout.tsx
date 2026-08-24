@@ -10,6 +10,7 @@ import {
   TagsOutlined,
   FileSearchOutlined,
   SettingOutlined,
+  IdcardOutlined,
 } from '@ant-design/icons';
 import { Api } from '@foodiebus/api-client';
 import { http } from '../api.js';
@@ -27,6 +28,7 @@ const TITLES: Record<string, string> = {
   '/categories': 'Categories',
   '/audit-logs': 'Audit Logs',
   '/settings': 'Settings',
+  '/profile': 'Profile',
 };
 
 export function DashboardLayout() {
@@ -59,6 +61,7 @@ export function DashboardLayout() {
       children: [
         { key: '/audit-logs', icon: <FileSearchOutlined />, label: 'Audit Logs' },
         { key: '/settings', icon: <SettingOutlined />, label: 'Settings' },
+        { key: '/profile', icon: <IdcardOutlined />, label: 'Profile' },
       ],
     },
   ];

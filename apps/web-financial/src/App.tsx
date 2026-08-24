@@ -10,6 +10,7 @@ import { SettlementsPage } from './financial/Settlements.js';
 import { DriverPayoutsPage } from './financial/DriverPayouts.js';
 import { ReconciliationPage } from './financial/Reconciliation.js';
 import { AnalyticsPage } from './financial/Analytics.js';
+import { ProfilePage } from './pages/Profile.js';
 
 function RootRedirect() {
   const { user, isAuthenticated } = useAuth();
@@ -38,6 +39,7 @@ export default function App() {
         <Route path="/driver-payouts" element={<DriverPayoutsPage />} />
         <Route path="/reconciliation" element={<ReconciliationPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
       </Route>
       <Route path="*" element={<RootRedirect />} />
     </Routes>

@@ -9,6 +9,7 @@ import {
   AuditOutlined,
   BarChartOutlined,
   MoneyCollectOutlined,
+  IdcardOutlined,
 } from '@ant-design/icons';
 import { Api } from '@foodiebus/api-client';
 import { http } from '../api.js';
@@ -26,6 +27,7 @@ const TITLES: Record<string, string> = {
   '/driver-payouts': 'Driver Payouts',
   '/reconciliation': 'Reconciliation',
   '/analytics': 'Analytics',
+  '/profile': 'Profile',
 };
 
 export function DashboardLayout() {
@@ -57,6 +59,11 @@ export function DashboardLayout() {
       type: 'group' as const,
       label: 'Operations',
       children: [{ key: '/reconciliation', icon: <AuditOutlined />, label: 'Reconciliation' }],
+    },
+    {
+      type: 'group' as const,
+      label: 'Account',
+      children: [{ key: '/profile', icon: <IdcardOutlined />, label: 'Profile' }],
     },
   ];
 
