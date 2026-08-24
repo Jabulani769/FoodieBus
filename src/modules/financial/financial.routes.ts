@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { financialService } from './financial.service.js';
+import { paymentService } from '../payments/payment.service.js';
 import { authenticate, authorize } from '../../shared/middleware/index.js';
 import { AppError } from '../../shared/errors/AppError.js';
 import {
@@ -290,6 +291,66 @@ export async function registerFinancialRoutes(app: FastifyInstance): Promise<voi
         .header('Content-Type', 'text/csv; charset=utf-8')
         .header('Content-Disposition', 'attachment; filename="payments.csv"')
         .send(csv);
+    },
+  );
+
+  app.get(
+    '/financial/payments',
+    {
+      preHandler: financialAuth,
+      schema: {
+        tags: ['financial'],
+        summary: 'List recent payments (financial)',
+        security: [{ bearerAuth: [] }],
+        querystring: {
+          type: 'object',
+          properties: {
+            limit: { type: 'integer', minimum: 1, maximum: 100, default: 10 },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              items: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    txRef: { type: 'string' },
+                    amount: { type: 'string' },
+                    currency: { type: 'string' },
+                    status: { type: 'string' },
+                    createdAt: { type: 'string' },
+                    passenger: {
+                      type: 'object',
+                      properties: {
+                        id: { type: 'string' },
+                        fullName: { type: 'string' },
+                        email: { type: 'string' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply) => {
+      const { limit } = request.query as { limit?: number };
+      const { items } = await paymentService.listRecent(limit ?? 10);
+      const mapped = (
+        items as Array<{
+          booking?: { passenger?: { id: string; fullName: string; email: string } };
+        }>
+      ).map((item) => {
+        const { booking, ...rest } = item;
+        return { ...rest, passenger: booking?.passenger ?? null };
+      });
+      return reply.send({ items: mapped });
     },
   );
 

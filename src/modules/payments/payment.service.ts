@@ -168,6 +168,17 @@ export class PaymentService {
     return payment;
   }
 
+  async listRecent(limit = 10): Promise<{ items: unknown[] }> {
+    const items = await prisma.payment.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      include: {
+        booking: { include: { passenger: { select: { id: true, fullName: true, email: true } } } },
+      },
+    });
+    return { items };
+  }
+
   async assertCanView(
     payment: { booking: { passengerId: string } },
     userId: string,

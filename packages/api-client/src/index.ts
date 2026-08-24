@@ -427,6 +427,14 @@ export class Api {
     return unwrap(await this.http.get('/payments/me'));
   }
 
+  async listPayments(
+    params: { limit?: number } = {},
+  ): Promise<{
+    items: Array<Payment & { passenger?: { id: string; fullName: string; email: string } }>;
+  }> {
+    return unwrap(await this.http.get('/financial/payments', { params }));
+  }
+
   async getPayment(id: string): Promise<Payment> {
     return unwrap(await this.http.get(`/payments/${id}`));
   }
