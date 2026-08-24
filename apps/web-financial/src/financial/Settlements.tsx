@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button, Card, DatePicker, Form, Modal, Table, message } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Api, extractError } from '@foodiebus/api-client';
-import { formatMoney, StatusBadge, EmptyState, PageHeader } from '@foodiebus/ui';
+import { formatMoney, StatusBadge, EmptyState, cardStyle, PageHeader } from '@foodiebus/ui';
 import { http } from '../api.js';
 import type { Settlement } from '@foodiebus/types';
 
@@ -80,6 +80,7 @@ export function SettlementsPage() {
     <>
       <PageHeader title="Settlements" subtitle="Operator and vendor settlement statements" />
       <Card
+        style={cardStyle}
         extra={
           <Button type="primary" onClick={() => setGenerateOpen(true)}>
             Generate for period

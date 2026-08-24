@@ -1,4 +1,5 @@
 import type { ThemeConfig } from 'antd';
+import type { CSSProperties } from 'react';
 
 export const colors = {
   primary: '#1677ff',
@@ -19,6 +20,12 @@ export const colors = {
     sidebarHover: '#1e293b',
   },
   border: '#e4e7ec',
+};
+
+export const cardStyle: React.CSSProperties = {
+  borderRadius: 12,
+  boxShadow: '0 1px 3px rgba(16, 24, 40, 0.08)',
+  border: `1px solid ${colors.border}`,
 };
 
 export const theme: ThemeConfig = {

@@ -15,7 +15,7 @@ import {
 import { PlusOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Api, extractError } from '@foodiebus/api-client';
-import { EmptyState, PageHeader } from '@foodiebus/ui';
+import { EmptyState, PageHeader, cardStyle } from '@foodiebus/ui';
 import { http } from '../api.js';
 
 const api = new Api(http);
@@ -119,6 +119,7 @@ export function CategoriesPage() {
     <>
       <PageHeader title="Categories" subtitle="Food menu categories" />
       <Card
+        style={cardStyle}
         extra={
           <Button
             type="primary"

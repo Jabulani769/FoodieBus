@@ -1,7 +1,7 @@
 import { Button, Card, Table, message } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Api, extractError } from '@foodiebus/api-client';
-import { formatDate, StatusBadge, EmptyState, PageHeader } from '@foodiebus/ui';
+import { formatDate, StatusBadge, EmptyState, cardStyle, PageHeader } from '@foodiebus/ui';
 import { http } from '../api.js';
 
 const api = new Api(http);
@@ -70,7 +70,7 @@ export function OperatorsPage() {
   return (
     <>
       <PageHeader title="Operators" subtitle="Manage transport operators" />
-      <Card>
+      <Card style={cardStyle}>
         <Table
           rowKey="id"
           columns={columns}

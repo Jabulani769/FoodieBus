@@ -2,7 +2,15 @@ import { Card, Col, Row, Table } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { FileDoneOutlined, ShopOutlined, WalletOutlined } from '@ant-design/icons';
 import { Api } from '@foodiebus/api-client';
-import { formatMoney, StatCard, EmptyState, PageHeader, colors, StatusBadge } from '@foodiebus/ui';
+import {
+  formatMoney,
+  StatCard,
+  EmptyState,
+  PageHeader,
+  colors,
+  cardStyle,
+  StatusBadge,
+} from '@foodiebus/ui';
 import { http } from '../api.js';
 import { useAuth } from '@foodiebus/auth';
 
@@ -54,7 +62,7 @@ export function VendorDashboard() {
   return (
     <>
       <PageHeader title="Vendor Dashboard" subtitle="Your on-board dining at a glance" />
-      <Card style={{ marginBottom: 16, borderRadius: 12 }}>
+      <Card style={{ ...cardStyle, marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div
             style={{
@@ -110,7 +118,7 @@ export function VendorDashboard() {
           />
         </Col>
       </Row>
-      <Card title="Recent orders" style={{ marginTop: 16, borderRadius: 12 }}>
+      <Card title="Recent orders" style={{ ...cardStyle, marginTop: 16 }}>
         <Table
           rowKey="id"
           columns={columns}

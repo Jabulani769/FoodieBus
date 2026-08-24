@@ -1,7 +1,7 @@
 import { Card, Rate, Table, Typography } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { Api } from '@foodiebus/api-client';
-import { formatDate, EmptyState, PageHeader } from '@foodiebus/ui';
+import { formatDate, EmptyState, cardStyle, PageHeader } from '@foodiebus/ui';
 import { http } from '../api.js';
 import { useAuth } from '@foodiebus/auth';
 
@@ -56,7 +56,7 @@ export function VendorRatings() {
     <>
       <PageHeader title="Ratings &amp; Reviews" subtitle="See what passengers think" />
       {avg && (
-        <Card style={{ marginBottom: 16 }}>
+        <Card style={{ ...cardStyle, marginBottom: 16 }}>
           <Typography.Text strong style={{ marginRight: 8 }}>
             Average rating:
           </Typography.Text>
@@ -64,7 +64,7 @@ export function VendorRatings() {
           <Typography.Text style={{ marginLeft: 8 }}>({avg})</Typography.Text>
         </Card>
       )}
-      <Card>
+      <Card style={cardStyle}>
         <Table
           rowKey="id"
           columns={columns}

@@ -5,7 +5,7 @@ import dayjs, { type Dayjs } from 'dayjs';
 import { useState } from 'react';
 import { Column, Pie, Line } from '@ant-design/charts';
 import { Api } from '@foodiebus/api-client';
-import { PageHeader, StatCard, colors, formatPercent } from '@foodiebus/ui';
+import { PageHeader, StatCard, colors, cardStyle, formatPercent } from '@foodiebus/ui';
 import { http } from '../api.js';
 import type { BookingFunnel, PaymentFunnel, PassengerOverview } from '@foodiebus/types';
 
@@ -86,22 +86,22 @@ export function AnalyticsPage() {
       />
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={12}>
-          <Card title="Revenue trend" loading={!growth}>
+          <Card style={cardStyle} title="Revenue trend" loading={!growth}>
             <Column data={growthData} xField="period" yField="value" height={260} />
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="Booking funnel" loading={!bookingFunnel}>
+          <Card style={cardStyle} title="Booking funnel" loading={!bookingFunnel}>
             <Pie data={bookingPie} angleField="value" colorField="type" height={260} />
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="Payment funnel" loading={!paymentFunnel}>
+          <Card style={cardStyle} title="Payment funnel" loading={!paymentFunnel}>
             <Pie data={paymentPie} angleField="value" colorField="type" height={260} />
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="Trip utilization" loading={!tripUtil}>
+          <Card style={cardStyle} title="Trip utilization" loading={!tripUtil}>
             <Line data={utilData} xField="route" yField="utilization" height={260} />
           </Card>
         </Col>

@@ -21,7 +21,7 @@ import { PictureOutlined, PlusOutlined, UploadOutlined } from '@ant-design/icons
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Api } from '@foodiebus/api-client';
 import { extractError } from '@foodiebus/api-client';
-import { colors, formatMoney, EmptyState, PageHeader } from '@foodiebus/ui';
+import { colors, formatMoney, EmptyState, cardStyle, PageHeader } from '@foodiebus/ui';
 import { http } from '../api.js';
 import { useAuth } from '@foodiebus/auth';
 
@@ -225,7 +225,7 @@ export function MenuPage() {
           </Button>
         }
       />
-      <Card>
+      <Card style={cardStyle}>
         <Table
           rowKey="id"
           columns={columns}

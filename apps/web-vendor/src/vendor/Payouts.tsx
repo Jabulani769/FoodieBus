@@ -1,7 +1,7 @@
 import { Card, Table } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { Api } from '@foodiebus/api-client';
-import { formatMoney, StatusBadge, EmptyState, PageHeader } from '@foodiebus/ui';
+import { formatMoney, StatusBadge, EmptyState, cardStyle, PageHeader } from '@foodiebus/ui';
 import { http } from '../api.js';
 import { useAuth } from '@foodiebus/auth';
 
@@ -54,7 +54,7 @@ export function PayoutsPage() {
   return (
     <>
       <PageHeader title="Payouts &amp; Settlements" subtitle="Your earnings and payout history" />
-      <Card>
+      <Card style={cardStyle}>
         <Table
           rowKey="id"
           columns={columns}

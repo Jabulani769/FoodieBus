@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button, Card, Form, Input, Modal, Table, Typography, message } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Api, extractError } from '@foodiebus/api-client';
-import { formatDate, EmptyState, PageHeader } from '@foodiebus/ui';
+import { formatDate, EmptyState, cardStyle, PageHeader } from '@foodiebus/ui';
 import { http } from '../api.js';
 
 const api = new Api(http);
@@ -94,7 +94,7 @@ export function SettingsPage() {
   return (
     <>
       <PageHeader title="Platform Settings" subtitle="Key-value configuration" />
-      <Card>
+      <Card style={cardStyle}>
         <Table
           rowKey="key"
           columns={columns}

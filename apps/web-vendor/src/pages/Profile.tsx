@@ -17,18 +17,12 @@ import {
 } from 'antd';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Api, extractError } from '@foodiebus/api-client';
-import { colors, PageHeader } from '@foodiebus/ui';
+import { colors, PageHeader, cardStyle } from '@foodiebus/ui';
 import { http } from '../api.js';
 import { useAuth } from '@foodiebus/auth';
 
 const api = new Api(http);
 const { Title, Text } = Typography;
-
-const cardStyle = {
-  borderRadius: 12,
-  boxShadow: '0 1px 3px rgba(16, 24, 40, 0.08)',
-  border: `1px solid ${colors.border}`,
-};
 
 export function ProfilePage() {
   const { user } = useAuth();

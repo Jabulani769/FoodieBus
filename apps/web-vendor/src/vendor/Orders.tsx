@@ -4,7 +4,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { io } from 'socket.io-client';
 import { Api } from '@foodiebus/api-client';
 import { extractError } from '@foodiebus/api-client';
-import { formatMoney, formatDate, StatusBadge, EmptyState, PageHeader } from '@foodiebus/ui';
+import {
+  formatMoney,
+  formatDate,
+  StatusBadge,
+  EmptyState,
+  cardStyle,
+  PageHeader,
+} from '@foodiebus/ui';
 import { http, wsUrl } from '../api.js';
 import { useAuth } from '@foodiebus/auth';
 import { tokenStore } from '@foodiebus/auth';
@@ -148,6 +155,7 @@ export function OrdersPage() {
     <>
       <PageHeader title="Orders" subtitle="Track and fulfill food orders" />
       <Card
+        style={cardStyle}
         title={
           <Space>
             <span>Food orders</span>

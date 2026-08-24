@@ -9,7 +9,7 @@ import {
 import dayjs, { type Dayjs } from 'dayjs';
 import { useState } from 'react';
 import { Api } from '@foodiebus/api-client';
-import { formatMoney, StatCard, EmptyState, PageHeader, colors } from '@foodiebus/ui';
+import { formatMoney, StatCard, EmptyState, PageHeader, colors, cardStyle } from '@foodiebus/ui';
 import { http } from '../api.js';
 
 const api = new Api(http);
@@ -128,7 +128,7 @@ export function RevenuePage() {
           />
         </Col>
       </Row>
-      <Card title="Daily revenue" style={{ marginTop: 16 }}>
+      <Card style={{ ...cardStyle, marginTop: 16 }} title="Daily revenue">
         <Table
           rowKey="date"
           columns={dailyColumns}
@@ -140,7 +140,7 @@ export function RevenuePage() {
       </Card>
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
         <Col xs={24} lg={12}>
-          <Card title="By route">
+          <Card style={cardStyle} title="By route">
             <Table
               rowKey="route"
               columns={routeColumns}
@@ -152,7 +152,7 @@ export function RevenuePage() {
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="By operator">
+          <Card style={cardStyle} title="By operator">
             <Table
               rowKey="operator"
               columns={operatorColumns}

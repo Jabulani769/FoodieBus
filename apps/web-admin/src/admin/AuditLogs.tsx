@@ -1,7 +1,7 @@
 import { Card, Table } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { Api } from '@foodiebus/api-client';
-import { EmptyState, formatDate, PageHeader } from '@foodiebus/ui';
+import { EmptyState, formatDate, cardStyle, PageHeader } from '@foodiebus/ui';
 import { http } from '../api.js';
 
 const api = new Api(http);
@@ -52,7 +52,7 @@ export function AuditLogsPage() {
   return (
     <>
       <PageHeader title="Audit Logs" subtitle="Trail of platform actions" />
-      <Card>
+      <Card style={cardStyle}>
         <Table
           rowKey="id"
           columns={columns}

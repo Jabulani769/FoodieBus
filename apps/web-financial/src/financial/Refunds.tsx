@@ -3,7 +3,14 @@ import { Button, Card, Form, Input, InputNumber, Modal, Select, Table, message }
 import { PlusOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Api, extractError } from '@foodiebus/api-client';
-import { formatMoney, formatDate, StatusBadge, EmptyState, PageHeader } from '@foodiebus/ui';
+import {
+  formatMoney,
+  formatDate,
+  StatusBadge,
+  EmptyState,
+  cardStyle,
+  PageHeader,
+} from '@foodiebus/ui';
 import { http } from '../api.js';
 import type { Refund, RefundStatus } from '@foodiebus/types';
 
@@ -104,6 +111,7 @@ export function RefundsPage() {
     <>
       <PageHeader title="Refunds" subtitle="Track and process customer refunds" />
       <Card
+        style={cardStyle}
         title={
           <Select
             allowClear

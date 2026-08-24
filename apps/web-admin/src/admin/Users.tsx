@@ -14,7 +14,7 @@ import {
 } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Api, extractError } from '@foodiebus/api-client';
-import { EmptyState, formatDate, StatusBadge, PageHeader } from '@foodiebus/ui';
+import { EmptyState, formatDate, StatusBadge, cardStyle, PageHeader } from '@foodiebus/ui';
 import { http } from '../api.js';
 
 const api = new Api(http);
@@ -141,6 +141,7 @@ export function UsersPage() {
     <>
       <PageHeader title="Users" subtitle="Manage platform accounts and roles" />
       <Card
+        style={cardStyle}
         title={
           <Space>
             <Input.Search

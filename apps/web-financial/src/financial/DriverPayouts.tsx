@@ -1,7 +1,7 @@
 import { Button, Card, Table, message } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Api, extractError } from '@foodiebus/api-client';
-import { formatMoney, StatusBadge, EmptyState, PageHeader } from '@foodiebus/ui';
+import { formatMoney, StatusBadge, EmptyState, cardStyle, PageHeader } from '@foodiebus/ui';
 import { http } from '../api.js';
 import type { DriverPayout } from '@foodiebus/types';
 
@@ -54,7 +54,7 @@ export function DriverPayoutsPage() {
   return (
     <>
       <PageHeader title="Driver Payouts" subtitle="Manage driver earnings and payouts" />
-      <Card>
+      <Card style={cardStyle}>
         <Table
           rowKey="id"
           columns={columns}
