@@ -7,6 +7,7 @@ import {
 } from './auth.service.js';
 import {
   createUserSchema,
+  changePasswordSchema,
   forgotPasswordSchema,
   inviteUserSchema,
   listUsersSchema,
@@ -14,6 +15,7 @@ import {
   logoutSchema,
   refreshSchema,
   resetPasswordSchema,
+  updateMeSchema,
   updateUserSchema,
   verifyInviteSchema,
 } from './auth.schema.js';
@@ -162,6 +164,59 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       });
       if (!userRecord) throw AppError.notFound('User not found');
       return reply.send(userRecord);
+    },
+  );
+
+  app.patch(
+    '/auth/me',
+    {
+      preHandler: [authenticate],
+      schema: {
+        tags: ['auth'],
+        summary: 'Update current user profile',
+        security: [{ bearerAuth: [] }],
+        body: {
+          type: 'object',
+          properties: {
+            fullName: { type: 'string', minLength: 1 },
+            phone: { type: 'string' },
+          },
+        },
+        response: { 200: { type: 'object', properties: { id: { type: 'string' } } } },
+      },
+    },
+    async (request: FastifyRequest, reply) => {
+      const user = requireUser(request);
+      const data = updateMeSchema.parse(request).body;
+      const result = await authService.updateMe(user.id, data);
+      return reply.send(result);
+    },
+  );
+
+  app.post(
+    '/auth/change-password',
+    {
+      preHandler: [authenticate],
+      schema: {
+        tags: ['auth'],
+        summary: 'Change current user password',
+        security: [{ bearerAuth: [] }],
+        body: {
+          type: 'object',
+          properties: {
+            currentPassword: { type: 'string', minLength: 8 },
+            newPassword: { type: 'string', minLength: 8 },
+          },
+          required: ['currentPassword', 'newPassword'],
+        },
+        response: { 200: { type: 'object', properties: { ok: { type: 'boolean' } } } },
+      },
+    },
+    async (request: FastifyRequest, reply) => {
+      const user = requireUser(request);
+      const { currentPassword, newPassword } = changePasswordSchema.parse(request).body;
+      await authService.changePassword(user.id, currentPassword, newPassword);
+      return reply.send({ ok: true });
     },
   );
 

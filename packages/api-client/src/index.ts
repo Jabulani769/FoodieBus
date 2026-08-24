@@ -60,6 +60,17 @@ export class Api {
     return unwrap(await this.http.get<User>('/auth/me'));
   }
 
+  async updateMe(input: { fullName?: string; phone?: string }): Promise<{ id: string }> {
+    return unwrap(await this.http.patch<{ id: string }>('/auth/me', input));
+  }
+
+  async changePassword(input: {
+    currentPassword: string;
+    newPassword: string;
+  }): Promise<{ ok: boolean }> {
+    return unwrap(await this.http.post<{ ok: boolean }>('/auth/change-password', input));
+  }
+
   async forgotPassword(identifier: string): Promise<void> {
     await this.http.post('/auth/forgot-password', { identifier });
   }
@@ -683,5 +694,21 @@ export class Api {
 
   async markNotificationRead(id: string): Promise<{ id: string }> {
     return unwrap(await this.http.patch<{ id: string }>(`/notifications/${id}/read`));
+  }
+
+  async getNotificationPreferences(): Promise<{
+    sms: boolean;
+    whatsapp: boolean;
+    email: boolean;
+  }> {
+    return unwrap(await this.http.get('/notifications/preferences'));
+  }
+
+  async updateNotificationPreferences(input: {
+    sms?: boolean;
+    whatsapp?: boolean;
+    email?: boolean;
+  }): Promise<{ sms: boolean; whatsapp: boolean; email: boolean }> {
+    return unwrap(await this.http.put('/notifications/preferences', input));
   }
 }

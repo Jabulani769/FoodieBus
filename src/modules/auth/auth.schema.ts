@@ -85,5 +85,26 @@ export const verifyInviteSchema = z.object({
   }),
 });
 
+export const updateMeSchema = z.object({
+  body: z
+    .object({
+      fullName: z.string().min(1, 'Full name is required').optional(),
+      phone: z
+        .string()
+        .regex(/^\+?\d{9,15}$/, 'Invalid phone number')
+        .optional(),
+    })
+    .refine((b) => Object.keys(b).length > 0, {
+      message: 'At least one field must be provided',
+    }),
+});
+
+export const changePasswordSchema = z.object({
+  body: z.object({
+    currentPassword: z.string().min(8, 'Current password is required'),
+    newPassword: z.string().min(8, 'New password must be at least 8 characters'),
+  }),
+});
+
 export type CreateUserInput = z.infer<typeof createUserSchema>['body'];
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;

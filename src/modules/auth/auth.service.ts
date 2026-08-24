@@ -212,6 +212,56 @@ export class AuthService {
     });
   }
 
+  async updateMe(
+    userId: string,
+    input: { fullName?: string; phone?: string },
+  ): Promise<{ id: string }> {
+    const data: { fullName?: string; phone?: string } = {};
+    if (input.fullName !== undefined) data.fullName = input.fullName;
+    if (input.phone !== undefined) {
+      const conflict = await prisma.user.findFirst({
+        where: { phone: input.phone, NOT: { id: userId } },
+        select: { id: true },
+      });
+      if (conflict) throw AppError.conflict('Phone number already in use');
+      data.phone = input.phone;
+    }
+
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data,
+      select: { id: true },
+    });
+    await writeAuditLog({
+      actorId: userId,
+      action: 'auth.profile_update',
+      entity: 'user',
+      entityId: userId,
+    });
+    return user;
+  }
+
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw AppError.notFound('User not found');
+
+    const valid = await verifyPassword(currentPassword, user.passwordHash);
+    if (!valid) throw AppError.unauthorized('Current password is incorrect');
+
+    const passwordHash = await hashPassword(newPassword);
+    await prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+    await writeAuditLog({
+      actorId: userId,
+      action: 'auth.password_change',
+      entity: 'user',
+      entityId: userId,
+    });
+  }
+
   // ---- Phone-OTP login (Easy Pay / mobile contract) ----
   // The mobile app authenticates by SMS OTP only (no password). We find-or-create
   // a STUDENT user keyed by phone, then issue a standard JWT on successful OTP.
