@@ -47,6 +47,7 @@ model User {
   passwordHash String
   role         Role      @default(STUDENT)
   fullName     String
+  profileImage String?
   isActive     Boolean   @default(true)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -95,6 +96,9 @@ model VendorProfile {
   description  String?
   phone        String?
   logoUrl      String?
+  bannerUrl    String?
+  cuisineType  String?
+  deliveryTime Int?
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

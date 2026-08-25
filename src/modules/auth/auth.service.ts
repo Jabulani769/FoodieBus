@@ -305,7 +305,7 @@ export class AuthService {
         name: user.fullName,
         email: user.email,
         phone: user.phone,
-        profile_image: null,
+        profile_image: user.profileImage ?? null,
       },
     };
   }

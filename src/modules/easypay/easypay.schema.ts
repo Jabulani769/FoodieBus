@@ -31,6 +31,7 @@ export const foodOrderSchema = z.object({
     items: z
       .array(z.object({ item_id: z.string().min(1), quantity: z.number().int().min(1) }))
       .min(1, 'At least one item is required'),
+    payment_method: z.string().optional(),
     delivery_address: z.string().optional(),
     total_price: z.number().nonnegative().optional(),
     booking_id: z.string().optional(),

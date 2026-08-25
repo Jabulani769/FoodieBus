@@ -121,7 +121,7 @@ export async function registerEasyPayRoutes(app: FastifyInstance): Promise<void>
     const user = requireUser(request);
     const record = await prisma.user.findUnique({
       where: { id: user.id },
-      select: { id: true, email: true, phone: true, fullName: true, role: true, isActive: true },
+      select: { id: true, email: true, phone: true, fullName: true, profileImage: true },
     });
     if (!record) throw AppError.notFound('User not found');
     return reply.send({
@@ -129,9 +129,7 @@ export async function registerEasyPayRoutes(app: FastifyInstance): Promise<void>
       name: record.fullName,
       email: record.email,
       phone: record.phone,
-      profile_image: null,
-      role: record.role,
-      is_active: record.isActive,
+      profile_image: record.profileImage ?? null,
     });
   });
 

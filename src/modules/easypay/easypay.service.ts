@@ -34,14 +34,25 @@ export class EasyPayService {
       where: { isActive: true },
       orderBy: { businessName: 'asc' },
     });
+
+    const vendorIds = vendors.map((v) => v.id);
+    const ratings = await prisma.rating.groupBy({
+      by: ['entityId'],
+      where: { entityType: 'VENDOR', entityId: { in: vendorIds } },
+      _avg: { score: true },
+    });
+    const ratingMap = new Map(
+      ratings.map((r) => [r.entityId, r._avg.score ? Number(r._avg.score.toFixed(1)) : null]),
+    );
+
     return vendors.map((v) => ({
       id: v.id,
       name: v.businessName,
       logo_url: v.logoUrl,
-      banner_url: null,
-      cuisine_type: null,
-      rating: null,
-      delivery_time: null,
+      banner_url: v.bannerUrl ?? null,
+      cuisine_type: v.cuisineType ?? null,
+      rating: ratingMap.get(v.id) ?? null,
+      delivery_time: v.deliveryTime ?? null,
       description: v.description,
       is_open: v.isActive,
     }));
@@ -160,6 +171,7 @@ export class EasyPayService {
     input: {
       kitchen_id: string;
       items: { item_id: string; quantity: number }[];
+      payment_method?: string;
       delivery_address?: string;
       total_price?: number;
       booking_id?: string;
