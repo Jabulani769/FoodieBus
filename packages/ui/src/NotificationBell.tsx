@@ -80,7 +80,19 @@ export function NotificationBell({ api }: { api: NotificationsApi }) {
     useNotifications(api);
 
   const content = (
-    <div style={{ width: 340, maxHeight: 440, display: 'flex', flexDirection: 'column' }}>
+    <div
+      style={{
+        width: 340,
+        maxHeight: 440,
+        display: 'flex',
+        flexDirection: 'column',
+        background: colors.bg.card,
+        borderRadius: 12,
+        boxShadow: '0 6px 24px rgba(16, 24, 40, 0.12)',
+        border: `1px solid ${colors.border}`,
+        padding: 12,
+      }}
+    >
       <div
         style={{
           display: 'flex',
