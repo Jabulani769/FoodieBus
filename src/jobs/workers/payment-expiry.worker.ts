@@ -94,13 +94,21 @@ export function startPaymentExpiryWorker(): Worker {
     logger.error({ jobId: job?.id, err }, 'payment-expiry job failed');
   });
 
+  worker.on('error', (err) => {
+    logger.error({ err, queue: PAYMENT_EXPIRY_QUEUE }, 'payment-expiry worker redis error');
+  });
+
   return worker;
 }
 
 export function schedulePaymentExpiry(): void {
-  void paymentExpiryQueue.upsertJobScheduler(
-    PAYMENT_EXPIRY_JOB,
-    { every: EXPIRY_INTERVAL_MS },
-    { name: PAYMENT_EXPIRY_JOB, data: {} },
-  );
+  paymentExpiryQueue
+    .upsertJobScheduler(
+      PAYMENT_EXPIRY_JOB,
+      { every: EXPIRY_INTERVAL_MS },
+      { name: PAYMENT_EXPIRY_JOB, data: {} },
+    )
+    .catch((err) =>
+      logger.error({ err, queue: PAYMENT_EXPIRY_QUEUE }, 'payment-expiry scheduler failed'),
+    );
 }

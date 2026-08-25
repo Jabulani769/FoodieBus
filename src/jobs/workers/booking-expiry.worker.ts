@@ -25,13 +25,21 @@ export function startBookingExpiryWorker(): Worker {
     logger.error({ jobId: job?.id, err }, 'booking-expiry job failed');
   });
 
+  worker.on('error', (err) => {
+    logger.error({ err, queue: BOOKING_EXPIRY_QUEUE }, 'booking-expiry worker redis error');
+  });
+
   return worker;
 }
 
 export function scheduleBookingExpiry(): void {
-  void bookingExpiryQueue.upsertJobScheduler(
-    BOOKING_EXPIRY_JOB,
-    { every: EXPIRY_INTERVAL_MS },
-    { name: BOOKING_EXPIRY_JOB, data: {} },
-  );
+  bookingExpiryQueue
+    .upsertJobScheduler(
+      BOOKING_EXPIRY_JOB,
+      { every: EXPIRY_INTERVAL_MS },
+      { name: BOOKING_EXPIRY_JOB, data: {} },
+    )
+    .catch((err) =>
+      logger.error({ err, queue: BOOKING_EXPIRY_QUEUE }, 'booking-expiry scheduler failed'),
+    );
 }

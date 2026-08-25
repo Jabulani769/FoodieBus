@@ -114,5 +114,9 @@ export function startNotificationWorker(): Worker {
     logger.error({ jobId: job?.id, err }, 'notification job failed');
   });
 
+  worker.on('error', (err) => {
+    logger.error({ err, queue: NOTIFICATIONS_QUEUE }, 'notification worker redis error');
+  });
+
   return worker;
 }

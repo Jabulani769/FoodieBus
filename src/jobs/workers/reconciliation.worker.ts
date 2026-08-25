@@ -61,13 +61,21 @@ export function startReconciliationWorker(): Worker {
     logger.error({ jobId: job?.id, err }, 'reconciliation job failed');
   });
 
+  worker.on('error', (err) => {
+    logger.error({ err, queue: RECONCILIATION_QUEUE }, 'reconciliation worker redis error');
+  });
+
   return worker;
 }
 
 export function scheduleReconciliation(): void {
-  void reconciliationQueue.upsertJobScheduler(
-    RECONCILIATION_JOB,
-    { every: RECONCILE_INTERVAL_MS },
-    { name: RECONCILIATION_JOB, data: {} },
-  );
+  reconciliationQueue
+    .upsertJobScheduler(
+      RECONCILIATION_JOB,
+      { every: RECONCILE_INTERVAL_MS },
+      { name: RECONCILIATION_JOB, data: {} },
+    )
+    .catch((err) =>
+      logger.error({ err, queue: RECONCILIATION_QUEUE }, 'reconciliation scheduler failed'),
+    );
 }
