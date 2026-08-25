@@ -161,6 +161,8 @@ export function NotificationBell({ api }: { api: NotificationsApi }) {
     </div>
   );
 
+  const hasUnread = unreadCount > 0;
+
   return (
     <Dropdown
       open={open}
@@ -174,7 +176,16 @@ export function NotificationBell({ api }: { api: NotificationsApi }) {
           type="text"
           shape="circle"
           aria-label="Notifications"
-          icon={<BellOutlined style={{ fontSize: 18 }} />}
+          icon={
+            <BellOutlined
+              style={{ fontSize: 18, color: hasUnread ? colors.primary : colors.text.secondary }}
+            />
+          }
+          style={{
+            background: hasUnread ? 'rgba(22, 119, 255, 0.12)' : '#f1f5f9',
+            border: 'none',
+            transition: 'background 0.15s',
+          }}
         />
       </Badge>
     </Dropdown>
