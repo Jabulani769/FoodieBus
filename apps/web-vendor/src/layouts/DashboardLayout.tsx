@@ -10,6 +10,7 @@ import {
   ScheduleOutlined,
   TeamOutlined,
   SettingOutlined,
+  NodeIndexOutlined,
   CarOutlined,
   ShopOutlined,
 } from '@ant-design/icons';
@@ -31,6 +32,7 @@ const TITLES: Record<string, string> = {
   '/operator/buses': 'Buses',
   '/operator/trips': 'Trips',
   '/operator/drivers': 'Drivers',
+  '/operator/routes': 'Routes',
   '/operator/settlements': 'Settlements',
   '/settings': 'Settings',
 };
@@ -75,6 +77,7 @@ export function DashboardLayout() {
             { key: '/operator/buses', icon: <CarOutlined />, label: 'Buses' },
             { key: '/operator/trips', icon: <ScheduleOutlined />, label: 'Trips' },
             { key: '/operator/drivers', icon: <TeamOutlined />, label: 'Drivers' },
+            { key: '/operator/routes', icon: <NodeIndexOutlined />, label: 'Routes' },
           ],
         },
         {

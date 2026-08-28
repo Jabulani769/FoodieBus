@@ -14,6 +14,7 @@ import { BusesPage } from './operator/Buses.js';
 import { TripsPage } from './operator/Trips.js';
 import { DriversPage } from './operator/Drivers.js';
 import { OperatorSettlements } from './operator/Settlements.js';
+import { RoutesPage } from './operator/Routes.js';
 
 function HomeRedirect() {
   const { user } = useAuth();
@@ -39,6 +40,7 @@ export function App() {
         <Route path="operator/buses" element={<BusesPage />} />
         <Route path="operator/trips" element={<TripsPage />} />
         <Route path="operator/drivers" element={<DriversPage />} />
+        <Route path="operator/routes" element={<RoutesPage />} />
         <Route path="operator/settlements" element={<OperatorSettlements />} />
         <Route path="settings" element={<ProfilePage />} />
       </Route>

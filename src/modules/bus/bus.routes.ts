@@ -399,7 +399,7 @@ export async function registerBusRoutes(app: FastifyInstance): Promise<void> {
   app.post(
     '/bus-routes',
     {
-      preHandler: [authenticate, authorize('SUPER_ADMIN', 'ADMIN')],
+      preHandler: [authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'OPERATOR')],
       schema: {
         tags: ['bus'],
         summary: 'Create a route (admin only)',
@@ -436,7 +436,7 @@ export async function registerBusRoutes(app: FastifyInstance): Promise<void> {
   app.patch(
     '/bus-routes/:id',
     {
-      preHandler: [authenticate, authorize('SUPER_ADMIN', 'ADMIN')],
+      preHandler: [authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'OPERATOR')],
       schema: {
         tags: ['bus'],
         summary: 'Update a route (admin only)',
@@ -501,7 +501,7 @@ export async function registerBusRoutes(app: FastifyInstance): Promise<void> {
   app.put(
     '/bus-routes/:id/stops',
     {
-      preHandler: [authenticate, authorize('SUPER_ADMIN', 'ADMIN')],
+      preHandler: [authenticate, authorize('SUPER_ADMIN', 'ADMIN', 'OPERATOR')],
       schema: {
         tags: ['bus'],
         summary: 'Replace the stops of a route (admin only)',

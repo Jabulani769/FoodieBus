@@ -8,6 +8,7 @@ import { UsersPage } from './admin/Users.js';
 import { VendorsPage } from './admin/Vendors.js';
 import { OperatorsPage } from './admin/Operators.js';
 import { CategoriesPage } from './admin/Categories.js';
+import { RoutesPage } from './admin/Routes.js';
 import { AuditLogsPage } from './admin/AuditLogs.js';
 import { SettingsPage } from './admin/Settings.js';
 import { ProfilePage } from './pages/Profile.js';
@@ -37,6 +38,7 @@ export default function App() {
         <Route path="/vendors" element={<VendorsPage />} />
         <Route path="/operators" element={<OperatorsPage />} />
         <Route path="/categories" element={<CategoriesPage />} />
+        <Route path="/routes" element={<RoutesPage />} />
         <Route path="/audit-logs" element={<AuditLogsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/profile" element={<ProfilePage />} />

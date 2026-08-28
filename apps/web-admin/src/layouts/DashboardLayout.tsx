@@ -11,6 +11,7 @@ import {
   FileSearchOutlined,
   SettingOutlined,
   IdcardOutlined,
+  NodeIndexOutlined,
 } from '@ant-design/icons';
 import { Api } from '@foodiebus/api-client';
 import { http } from '../api.js';
@@ -26,6 +27,7 @@ const TITLES: Record<string, string> = {
   '/vendors': 'Vendors',
   '/operators': 'Operators',
   '/categories': 'Categories',
+  '/routes': 'Routes',
   '/audit-logs': 'Audit Logs',
   '/settings': 'Settings',
   '/profile': 'Profile',
@@ -53,6 +55,7 @@ export function DashboardLayout() {
         { key: '/vendors', icon: <ShopOutlined />, label: 'Vendors' },
         { key: '/operators', icon: <CarOutlined />, label: 'Operators' },
         { key: '/categories', icon: <TagsOutlined />, label: 'Categories' },
+        { key: '/routes', icon: <NodeIndexOutlined />, label: 'Routes' },
       ],
     },
     {

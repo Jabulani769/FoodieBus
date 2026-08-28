@@ -43,3 +43,16 @@ tmp/
 # Local uploads (mock storage)
 /uploads/
 /uploads-test/
+
+# OpenCode config
+.opencode/
+
+# Redis dump file
+dump.rdb
+
+# Generated root-level reports (PDFs)
+/*.pdf
+
+# Local scratch notes
+NEXT_PHASES.txt
+ROADMAP_PHASE2.txt
