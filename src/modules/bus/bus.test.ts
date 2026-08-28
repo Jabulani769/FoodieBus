@@ -379,12 +379,24 @@ describe('bus module', () => {
       expect(res.statusCode).toBe(409);
     });
 
-    it('POST /bus-routes forbids an operator', async () => {
+    it('POST /bus-routes allows an operator', async () => {
       const operator = await createOperatorUser();
       const res = await app.inject({
         method: 'POST',
         url: '/api/v1/bus-routes',
         headers: { authorization: `Bearer ${operator.accessToken}` },
+        payload: { fromCity: 'A', toCity: 'B', basePrice: 1000 },
+      });
+      expect(res.statusCode).toBe(201);
+      expect(res.json().id).toBeTypeOf('string');
+    });
+
+    it('POST /bus-routes forbids a student', async () => {
+      const student = await createStudentUser();
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/v1/bus-routes',
+        headers: { authorization: `Bearer ${student.accessToken}` },
         payload: { fromCity: 'A', toCity: 'B', basePrice: 1000 },
       });
       expect(res.statusCode).toBe(403);
