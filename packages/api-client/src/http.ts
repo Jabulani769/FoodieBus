@@ -66,7 +66,11 @@ export function createHttpClient(options: ClientOptions): AxiosInstance {
     const refreshToken = options.tokenStore.getRefreshToken();
     if (!refreshToken) return null;
     try {
-      const res = await axios.post(`${options.baseURL}/auth/refresh`, { refreshToken });
+      const res = await axios.post(
+        `${options.baseURL}/auth/refresh`,
+        { refreshToken },
+        { timeout: 10000 },
+      );
       const data = res.data as { accessToken: string; refreshToken: string };
       options.tokenStore.setTokens(data.accessToken, data.refreshToken);
       return data.accessToken;

@@ -15,7 +15,7 @@ import {
   Typography,
   message,
 } from 'antd';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Api, extractError } from '@foodiebus/api-client';
 import { colors, PageHeader, cardStyle } from '@foodiebus/ui';
 import { http } from '../api.js';
@@ -25,6 +25,7 @@ const api = new Api(http);
 const { Title, Text } = Typography;
 
 export function ProfilePage() {
+  const queryClient = useQueryClient();
   const { user } = useAuth();
   const isVendor = user?.role === 'VENDOR';
 
@@ -47,7 +48,10 @@ export function ProfilePage() {
 
   const save = useMutation({
     mutationFn: updateProfile,
-    onSuccess: () => message.success('Profile updated'),
+    onSuccess: () => {
+      message.success('Profile updated');
+      queryClient.invalidateQueries({ queryKey: [profileKey] });
+    },
     onError: (err) => message.error(extractError(err).message),
   });
 
