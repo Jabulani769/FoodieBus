@@ -104,7 +104,22 @@ export function DriversPage() {
         onOk={() => form.submit()}
         confirmLoading={createDriver.isPending}
       >
-        <Form form={form} layout="vertical" onFinish={(v) => createDriver.mutate(v)}>
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={(v) => {
+            const cleaned = Object.fromEntries(
+              Object.entries(v).filter(([, val]) => val !== ''),
+            ) as {
+              fullName: string;
+              phone: string;
+              email: string;
+              password: string;
+              licenseNumber?: string;
+            };
+            createDriver.mutate(cleaned);
+          }}
+        >
           <Form.Item
             name="fullName"
             label="Full name"
