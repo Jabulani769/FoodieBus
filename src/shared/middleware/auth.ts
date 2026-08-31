@@ -30,6 +30,22 @@ export async function authenticate(request: FastifyRequest, _reply: FastifyReply
   };
 }
 
+export async function authenticateOptional(
+  request: FastifyRequest,
+  _reply: FastifyReply,
+): Promise<void> {
+  const token = extractBearerToken(request);
+  if (!token) return;
+  const payload = verifyAccessToken(token);
+  if (!payload) return;
+  request.user = {
+    id: payload.sub,
+    role: payload.role,
+    email: payload.email,
+    phone: payload.phone,
+  };
+}
+
 export function authorize(...allowedRoles: Role[]) {
   return async (request: FastifyRequest, _reply: FastifyReply): Promise<void> => {
     const user = request.user;

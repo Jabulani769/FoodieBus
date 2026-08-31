@@ -1,1 +1,1 @@
-export { authenticate, authorize, requireRole } from './auth.js';
+export { authenticate, authenticateOptional, authorize, requireRole } from './auth.js';
