@@ -256,10 +256,10 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
   app.get(
     '/admin/settings',
     {
-      preHandler: superAdminAuth,
+      preHandler: adminAuth,
       schema: {
         tags: ['admin'],
-        summary: 'List all platform settings (super admin)',
+        summary: 'List all platform settings',
         security: [{ bearerAuth: [] }],
         response: { 200: { type: 'array' } },
       },
@@ -272,10 +272,10 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
   app.get(
     '/admin/settings/:key',
     {
-      preHandler: superAdminAuth,
+      preHandler: adminAuth,
       schema: {
         tags: ['admin'],
-        summary: 'Get a platform setting by key (super admin)',
+        summary: 'Get a platform setting by key',
         security: [{ bearerAuth: [] }],
         params: { type: 'object', properties: { key: { type: 'string' } } },
         response: { 200: { type: 'object', additionalProperties: true } },
@@ -290,10 +290,10 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
   app.put(
     '/admin/settings/:key',
     {
-      preHandler: superAdminAuth,
+      preHandler: adminAuth,
       schema: {
         tags: ['admin'],
-        summary: 'Create or update a platform setting (super admin)',
+        summary: 'Create or update a platform setting',
         security: [{ bearerAuth: [] }],
         params: { type: 'object', properties: { key: { type: 'string' } } },
         body: {

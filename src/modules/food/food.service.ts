@@ -69,12 +69,16 @@ export class FoodService {
 
   // ---- Vendor profiles ----
 
-  async listVendors(page: number, limit: number): Promise<PaginatedResult<unknown>> {
-    const where = { isActive: true };
+  async listVendors(
+    page: number,
+    limit: number,
+    opts: { includeInactive?: boolean } = {},
+  ): Promise<PaginatedResult<unknown>> {
+    const where = opts.includeInactive ? {} : { isActive: true };
     const [items, total] = await Promise.all([
       prisma.vendorProfile.findMany({
         where,
-        include: { user: { select: { fullName: true } } },
+        include: { user: { select: { fullName: true, email: true } } },
         orderBy: { businessName: 'asc' },
         skip: (page - 1) * limit,
         take: limit,
@@ -84,12 +88,13 @@ export class FoodService {
     return { items, page, limit, total };
   }
 
-  async getVendorById(id: string): Promise<unknown> {
+  async getVendorById(id: string, opts: { includeInactive?: boolean } = {}): Promise<unknown> {
     const vendor = await prisma.vendorProfile.findUnique({
       where: { id },
-      include: { user: { select: { fullName: true } } },
+      include: { user: { select: { fullName: true, email: true } } },
     });
-    if (!vendor || !vendor.isActive) throw AppError.notFound('Vendor not found');
+    if (!vendor || (!opts.includeInactive && !vendor.isActive))
+      throw AppError.notFound('Vendor not found');
     return vendor;
   }
 

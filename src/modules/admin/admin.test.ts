@@ -433,7 +433,7 @@ describe('admin module', () => {
       expect(res.statusCode).toBe(404);
     });
 
-    it('settings endpoints are forbidden for plain admins', async () => {
+    it('settings endpoints are accessible to plain admins', async () => {
       const admin = await adminUser();
       const res = await app.inject({
         method: 'PUT',
@@ -441,7 +441,9 @@ describe('admin module', () => {
         headers: { authorization: `Bearer ${admin.accessToken}` },
         payload: { value: true },
       });
-      expect(res.statusCode).toBe(403);
+      expect(res.statusCode).toBe(200);
+      expect(res.json().key).toBe('maintenance_mode');
+      expect(res.json().value).toBe(true);
     });
   });
 });

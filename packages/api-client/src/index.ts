@@ -32,6 +32,8 @@ import { unwrap, type ApiClientError } from './http.js';
 
 export { createHttpClient, extractError } from './http.js';
 export type { ApiClientError, ApiError, TokenStore, ClientOptions } from './http.js';
+export { AUTH_EXPIRED_EVENT } from './http.js';
+export { getErrorMessage } from './errors.js';
 
 export interface NotificationItem {
   id: string;

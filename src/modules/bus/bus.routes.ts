@@ -26,7 +26,7 @@ import {
   updateTripLocationSchema,
   updateTripStatusSchema,
 } from './bus.schema.js';
-import { authenticate, authorize } from '../../shared/middleware/index.js';
+import { authenticate, authenticateOptional, authorize } from '../../shared/middleware/index.js';
 import { AppError } from '../../shared/errors/AppError.js';
 import { writeAuditLog } from '../../shared/audit/audit.js';
 import { prisma } from '../../shared/db/prisma.js';
@@ -49,12 +49,15 @@ async function requireOperatorId(userId: string): Promise<string> {
 export async function registerBusRoutes(app: FastifyInstance): Promise<void> {
   // ---- Operator profiles ----
 
+  const canViewInactive = (req: FastifyRequest): boolean =>
+    ['ADMIN', 'SUPER_ADMIN', 'FINANCIAL'].includes(req.user?.role ?? '');
+
   app.get(
     '/operators',
     {
       schema: {
         tags: ['bus'],
-        summary: 'List active operators',
+        summary: 'List operators',
         querystring: {
           type: 'object',
           properties: {
@@ -77,6 +80,15 @@ export async function registerBusRoutes(app: FastifyInstance): Promise<void> {
                     phone: { type: 'string' },
                     logoUrl: { type: 'string' },
                     licenseNumber: { type: 'string' },
+                    isActive: { type: 'boolean' },
+                    createdAt: { type: 'string', format: 'date-time' },
+                    user: {
+                      type: 'object',
+                      properties: {
+                        fullName: { type: 'string' },
+                        email: { type: 'string' },
+                      },
+                    },
                   },
                 },
               },
@@ -87,10 +99,13 @@ export async function registerBusRoutes(app: FastifyInstance): Promise<void> {
           },
         },
       },
+      preHandler: [authenticateOptional],
     },
     async (request, reply) => {
       const q = listOperatorsSchema.parse({ querystring: request.query }).querystring;
-      const result = await busService.listOperators(q.page, q.limit);
+      const result = await busService.listOperators(q.page, q.limit, {
+        includeInactive: canViewInactive(request),
+      });
       return reply.send(result);
     },
   );
@@ -112,14 +127,26 @@ export async function registerBusRoutes(app: FastifyInstance): Promise<void> {
               phone: { type: 'string' },
               logoUrl: { type: 'string' },
               licenseNumber: { type: 'string' },
+              isActive: { type: 'boolean' },
+              createdAt: { type: 'string', format: 'date-time' },
+              user: {
+                type: 'object',
+                properties: {
+                  fullName: { type: 'string' },
+                  email: { type: 'string' },
+                },
+              },
             },
           },
         },
       },
+      preHandler: [authenticateOptional],
     },
     async (request, reply) => {
       const { id } = operatorParamsSchema.parse(request).params;
-      const operator = await busService.getOperatorById(id);
+      const operator = await busService.getOperatorById(id, {
+        includeInactive: canViewInactive(request),
+      });
       return reply.send(operator);
     },
   );

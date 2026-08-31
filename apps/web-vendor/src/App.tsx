@@ -1,5 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
-import { useAuth } from '@foodiebus/auth';
+import { useAuth, AuthGuard } from '@foodiebus/auth';
 import { LoginPage } from './pages/Login.js';
 import { ForgotPasswordPage } from './pages/ForgotPassword.js';
 import { DashboardLayout } from './layouts/DashboardLayout.js';
@@ -29,7 +29,13 @@ export function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-      <Route element={<DashboardLayout />}>
+      <Route
+        element={
+          <AuthGuard>
+            <DashboardLayout />
+          </AuthGuard>
+        }
+      >
         <Route path="/" element={<HomeRedirect />} />
         <Route path="vendor" element={<VendorDashboard />} />
         <Route path="vendor/menu" element={<MenuPage />} />

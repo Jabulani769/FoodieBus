@@ -13,7 +13,7 @@ import {
   updateDishSchema,
   updateVendorProfileSchema,
 } from './food.schema.js';
-import { authenticate, authorize } from '../../shared/middleware/index.js';
+import { authenticate, authenticateOptional, authorize } from '../../shared/middleware/index.js';
 import { AppError } from '../../shared/errors/AppError.js';
 import { writeAuditLog } from '../../shared/audit/audit.js';
 import { prisma } from '../../shared/db/prisma.js';
@@ -34,6 +34,9 @@ async function requireVendorId(userId: string): Promise<string> {
 }
 
 export async function registerFoodRoutes(app: FastifyInstance): Promise<void> {
+  const canViewInactive = (req: FastifyRequest): boolean =>
+    ['ADMIN', 'SUPER_ADMIN', 'FINANCIAL'].includes(req.user?.role ?? '');
+
   // ---- Categories ----
 
   app.get(
@@ -177,7 +180,7 @@ export async function registerFoodRoutes(app: FastifyInstance): Promise<void> {
     {
       schema: {
         tags: ['food'],
-        summary: 'List active vendors',
+        summary: 'List vendors',
         querystring: {
           type: 'object',
           properties: {
@@ -199,6 +202,15 @@ export async function registerFoodRoutes(app: FastifyInstance): Promise<void> {
                     description: { type: 'string' },
                     phone: { type: 'string' },
                     logoUrl: { type: 'string' },
+                    isActive: { type: 'boolean' },
+                    createdAt: { type: 'string', format: 'date-time' },
+                    user: {
+                      type: 'object',
+                      properties: {
+                        fullName: { type: 'string' },
+                        email: { type: 'string' },
+                      },
+                    },
                   },
                 },
               },
@@ -209,10 +221,13 @@ export async function registerFoodRoutes(app: FastifyInstance): Promise<void> {
           },
         },
       },
+      preHandler: [authenticateOptional],
     },
     async (request, reply) => {
       const q = listVendorsSchema.parse({ querystring: request.query }).querystring;
-      const result = await foodService.listVendors(q.page, q.limit);
+      const result = await foodService.listVendors(q.page, q.limit, {
+        includeInactive: canViewInactive(request),
+      });
       return reply.send(result);
     },
   );
@@ -233,14 +248,26 @@ export async function registerFoodRoutes(app: FastifyInstance): Promise<void> {
               description: { type: 'string' },
               phone: { type: 'string' },
               logoUrl: { type: 'string' },
+              isActive: { type: 'boolean' },
+              createdAt: { type: 'string', format: 'date-time' },
+              user: {
+                type: 'object',
+                properties: {
+                  fullName: { type: 'string' },
+                  email: { type: 'string' },
+                },
+              },
             },
           },
         },
       },
+      preHandler: [authenticateOptional],
     },
     async (request, reply) => {
       const { id } = getVendorParamsSchema.parse(request).params;
-      const vendor = await foodService.getVendorById(id);
+      const vendor = await foodService.getVendorById(id, {
+        includeInactive: canViewInactive(request),
+      });
       return reply.send(vendor);
     },
   );

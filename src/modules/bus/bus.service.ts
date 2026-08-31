@@ -37,12 +37,16 @@ export interface PaginatedResult<T> {
 export class BusService {
   // ---- Operator profiles ----
 
-  async listOperators(page: number, limit: number): Promise<PaginatedResult<unknown>> {
-    const where = { isActive: true };
+  async listOperators(
+    page: number,
+    limit: number,
+    opts: { includeInactive?: boolean } = {},
+  ): Promise<PaginatedResult<unknown>> {
+    const where = opts.includeInactive ? {} : { isActive: true };
     const [items, total] = await Promise.all([
       prisma.operatorProfile.findMany({
         where,
-        include: { user: { select: { fullName: true } } },
+        include: { user: { select: { fullName: true, email: true } } },
         orderBy: { businessName: 'asc' },
         skip: (page - 1) * limit,
         take: limit,
@@ -52,12 +56,13 @@ export class BusService {
     return { items, page, limit, total };
   }
 
-  async getOperatorById(id: string): Promise<unknown> {
+  async getOperatorById(id: string, opts: { includeInactive?: boolean } = {}): Promise<unknown> {
     const operator = await prisma.operatorProfile.findUnique({
       where: { id },
-      include: { user: { select: { fullName: true } } },
+      include: { user: { select: { fullName: true, email: true } } },
     });
-    if (!operator || !operator.isActive) throw AppError.notFound('Operator not found');
+    if (!operator || (!opts.includeInactive && !operator.isActive))
+      throw AppError.notFound('Operator not found');
     return operator;
   }
 

@@ -4,10 +4,22 @@ import axios, {
   type AxiosRequestConfig,
   type InternalAxiosRequestConfig,
 } from 'axios';
+import { getErrorMessage } from './errors.js';
 
 export interface ApiError {
   code: string;
   message: string;
+}
+
+/** Dispatched when a 401 cannot be recovered — the session is gone. */
+export const AUTH_EXPIRED_EVENT = 'foodiebus:auth-expired';
+
+function notifyAuthExpired(): void {
+  try {
+    window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+  } catch {
+    // SSR / non-browser environments — nothing to notify.
+  }
 }
 
 export interface TokenStore {
@@ -35,10 +47,11 @@ export class ApiClientError extends Error {
 }
 
 export function extractError(err: unknown): ApiClientError {
+  if (err instanceof ApiClientError) return err;
   if (axios.isAxiosError(err)) {
     const data = err.response?.data as { error?: ApiError } | undefined;
-    const message = data?.error?.message ?? err.message;
-    const code = data?.error?.code ?? 'HTTP_ERROR';
+    const code = data?.error?.code ?? (err.response ? 'HTTP_ERROR' : 'NETWORK_ERROR');
+    const message = getErrorMessage(err);
     return new ApiClientError(message, code, err.response?.status);
   }
   if (err instanceof Error) return new ApiClientError(err.message, 'UNKNOWN');
@@ -87,6 +100,20 @@ export function createHttpClient(options: ClientOptions): AxiosInstance {
         (InternalAxiosRequestConfig & { _retry?: boolean }) | undefined;
       if (error.response?.status === 401 && original && !original._retry) {
         original._retry = true;
+
+        // Without a refresh token the session cannot be recovered.
+        if (!options.tokenStore.getRefreshToken()) {
+          options.tokenStore.clear();
+          notifyAuthExpired();
+          return Promise.reject(
+            new ApiClientError(
+              'Your session has expired. Please log in again.',
+              'SESSION_EXPIRED',
+              401,
+            ),
+          );
+        }
+
         if (!refreshing) {
           refreshing = refreshAccessToken().finally(() => {
             refreshing = null;
@@ -97,6 +124,17 @@ export function createHttpClient(options: ClientOptions): AxiosInstance {
           original.headers.set('Authorization', `Bearer ${token}`);
           return client(original);
         }
+
+        // The refresh attempt failed — the session cannot be recovered either.
+        options.tokenStore.clear();
+        notifyAuthExpired();
+        return Promise.reject(
+          new ApiClientError(
+            'Your session has expired. Please log in again.',
+            'SESSION_EXPIRED',
+            401,
+          ),
+        );
       }
       return Promise.reject(error);
     },

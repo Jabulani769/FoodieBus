@@ -113,7 +113,11 @@ export function SettingsPage() {
         confirmLoading={save.isPending}
       >
         <Form form={form} layout="vertical" onFinish={onSubmit}>
-          <Form.Item name="value" label="Value (JSON or plain text)">
+          <Form.Item
+            name="value"
+            label="Value (JSON or plain text)"
+            rules={[{ required: true, message: 'Value required' }]}
+          >
             <Input.TextArea rows={4} />
           </Form.Item>
         </Form>
