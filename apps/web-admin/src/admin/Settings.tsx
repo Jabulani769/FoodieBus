@@ -18,19 +18,31 @@ export function SettingsPage() {
   const [editing, setEditing] = useState<SettingRow | null>(null);
   const [form] = Form.useForm();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['settings'],
     queryFn: () => api.listSettings(),
+    retry: 1,
   });
+
+  // Backend returns a raw array; tolerate a wrapped {items} shape too so the
+  // table never renders "No settings yet" right after a successful save.
+  const rows = (
+    Array.isArray(data) ? data : (data as unknown as { items?: SettingRow[] })?.items ?? []
+  ) as SettingRow[];
 
   const save = useMutation({
     mutationFn: ({ key, value }: { key: string; value: unknown }) => api.upsertSetting(key, value),
     onSuccess: () => {
       message.success('Setting saved');
       setEditing(null);
+      form.resetFields();
       queryClient.invalidateQueries({ queryKey: ['settings'] });
     },
-    onError: (err) => message.error(extractError(err).message),
+    onError: (err) => {
+      // Keep the modal OPEN on failure (old code closed nothing but left the
+      // spinner) and surface a retryable error instead of hanging.
+      message.error(`${extractError(err).message} — not saved, retry`, 6);
+    },
   });
 
   const columns = [
@@ -94,12 +106,20 @@ export function SettingsPage() {
   return (
     <>
       <PageHeader title="Platform Settings" subtitle="Key-value configuration" />
+      {isError && (
+        <Card style={{ ...cardStyle, marginBottom: 16 }}>
+          <span>Couldn&apos;t load settings. </span>
+          <Button size="small" onClick={() => refetch()}>
+            Retry
+          </Button>
+        </Card>
+      )}
       <Card style={cardStyle}>
         <Table
           rowKey="key"
           columns={columns}
-          dataSource={(data ?? []) as SettingRow[]}
-          loading={isLoading}
+          dataSource={rows}
+          loading={isLoading || save.isPending}
           tableLayout="fixed"
           scroll={{ x: 'max-content' }}
           locale={{ emptyText: <EmptyState title="No settings yet" /> }}
@@ -108,9 +128,14 @@ export function SettingsPage() {
       <Modal
         title={`Edit ${editing?.key ?? ''}`}
         open={!!editing}
-        onCancel={() => setEditing(null)}
+        onCancel={() => {
+          if (save.isPending) return;
+          setEditing(null);
+        }}
         onOk={() => form.submit()}
         confirmLoading={save.isPending}
+        okButtonProps={{ disabled: save.isPending }}
+        cancelButtonProps={{ disabled: save.isPending }}
       >
         <Form form={form} layout="vertical" onFinish={onSubmit}>
           <Form.Item

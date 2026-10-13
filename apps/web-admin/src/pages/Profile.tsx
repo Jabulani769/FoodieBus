@@ -83,6 +83,7 @@ export function ProfilePage() {
 
   const displayName = me?.fullName || user?.fullName || '—';
   const initial = (displayName || 'U').charAt(0).toUpperCase();
+  const avatarSrc = (me as { profileImage?: string | null })?.profileImage || undefined;
 
   const onTogglePref = (key: keyof Prefs, value: boolean) => {
     setPrefs((prev) => ({ ...prev, [key]: value }));
@@ -109,6 +110,7 @@ export function ProfilePage() {
             >
               <Avatar
                 size={88}
+                src={avatarSrc}
                 style={{ backgroundColor: colors.primary, fontSize: 36, fontWeight: 600 }}
               >
                 {initial}
