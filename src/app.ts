@@ -54,6 +54,10 @@ export async function buildApp(
   await app.register(cors, {
     origin: true,
     credentials: true,
+    // @fastify/cors defaults allow-methods to safelisted GET,HEAD,POST only,
+    // which makes browsers block every PATCH/PUT/DELETE preflight (the
+    // dashboards use them for profile, menu, hours, trips, settlements...).
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });
 
   await app.register(sensible);

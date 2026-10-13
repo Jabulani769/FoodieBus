@@ -109,16 +109,28 @@ export class Api {
   }
 
   // ---- Food ----
-  async listCategories(): Promise<{ items: Category[] }> {
-    return unwrap(await this.http.get('/categories'));
+  async listCategories(params: { search?: string; includeInactive?: string } = {}): Promise<{
+    items: Category[];
+  }> {
+    return unwrap(await this.http.get('/categories', { params }));
   }
 
   async createCategory(input: {
     name: string;
-    slug: string;
+    slug?: string;
     sortOrder?: number;
   }): Promise<{ id: string }> {
     return unwrap(await this.http.post('/categories', input));
+  }
+
+  async findOrCreateCategory(name: string): Promise<{ id: string; created: boolean }> {
+    return unwrap(await this.http.post('/categories/find-or-create', { name }));
+  }
+
+  async reorderCategories(
+    items: { id: string; sortOrder: number }[],
+  ): Promise<{ updated: number }> {
+    return unwrap(await this.http.patch('/categories/reorder', { items }));
   }
 
   async updateCategory(
@@ -132,7 +144,18 @@ export class Api {
     await this.http.delete(`/categories/${id}`);
   }
 
-  async listVendors(params: { page?: number; limit?: number } = {}): Promise<Page<Vendor>> {
+  async listVendors(
+    params: {
+      page?: number;
+      limit?: number;
+      categoryId?: string;
+      categorySlug?: string;
+      lat?: number;
+      lng?: number;
+      radiusKm?: number;
+      onlyOpen?: string;
+    } = {},
+  ): Promise<Page<Vendor>> {
     return unwrap(await this.http.get('/vendors', { params }));
   }
 
@@ -145,9 +168,36 @@ export class Api {
   }
 
   async updateVendorProfile(
-    input: Partial<{ businessName: string; description: string; phone: string; logoUrl: string }>,
+    input: Partial<{
+      businessName: string;
+      description: string;
+      phone: string;
+      logoUrl: string;
+      bannerUrl: string;
+      cuisineType: string;
+      deliveryTime: number;
+      deliveryRadiusKm: number;
+      address: string;
+      city: string;
+      latitude: number;
+      longitude: number;
+    }>,
   ): Promise<{ id: string }> {
     return unwrap(await this.http.patch('/vendors/me/profile', input));
+  }
+
+  async setVendorPaused(isPaused: boolean): Promise<{ id: string; isPaused: boolean }> {
+    return unwrap(await this.http.patch('/vendors/me/pause', { isPaused }));
+  }
+
+  async getVendorHours(): Promise<{ items: import('@foodiebus/types').VendorHours[] }> {
+    return unwrap(await this.http.get('/vendors/me/hours'));
+  }
+
+  async updateVendorHours(
+    hours: { dayOfWeek: number; openTime: string; closeTime: string; isClosed?: boolean }[],
+  ): Promise<{ id: string }> {
+    return unwrap(await this.http.put('/vendors/me/hours', { hours }));
   }
 
   async listDishes(
@@ -155,6 +205,12 @@ export class Api {
     params: { page?: number; limit?: number; categoryId?: string; isAvailable?: string } = {},
   ): Promise<Page<Dish>> {
     return unwrap(await this.http.get(`/vendors/${vendorId}/dishes`, { params }));
+  }
+
+  async getVendorMenuGrouped(
+    vendorId: string,
+  ): Promise<{ groups: { header?: string; name?: string; items: Dish[] }[] }> {
+    return unwrap(await this.http.get(`/vendors/${vendorId}/menu-grouped`));
   }
 
   async getDish(id: string): Promise<Dish> {
@@ -195,6 +251,115 @@ export class Api {
     input: { isAvailable: boolean; availableFrom?: string; availableTo?: string },
   ): Promise<{ id: string }> {
     return unwrap(await this.http.patch(`/dishes/${id}/availability`, input));
+  }
+
+  async createOptionGroup(
+    dishId: string,
+    input: {
+      name: string;
+      type?: 'SINGLE' | 'MULTI';
+      isRequired?: boolean;
+      minSelect?: number;
+      maxSelect?: number | null;
+      sortOrder?: number;
+      isActive?: boolean;
+    },
+  ): Promise<{ id: string }> {
+    return unwrap(await this.http.post(`/dishes/${dishId}/option-groups`, input));
+  }
+
+  async createOption(
+    dishId: string,
+    groupId: string,
+    input: { label: string; priceDelta?: number; sortOrder?: number; isActive?: boolean },
+  ): Promise<{ id: string }> {
+    return unwrap(
+      await this.http.post(`/dishes/${dishId}/option-groups/${groupId}/options`, input),
+    );
+  }
+
+  async updateOptionGroup(
+    dishId: string,
+    groupId: string,
+    input: Partial<{
+      name: string;
+      type: 'SINGLE' | 'MULTI';
+      isRequired: boolean;
+      minSelect: number;
+      maxSelect: number | null;
+      sortOrder: number;
+      isActive: boolean;
+    }>,
+  ): Promise<{ id: string }> {
+    return unwrap(await this.http.patch(`/dishes/${dishId}/option-groups/${groupId}`, input));
+  }
+
+  async deleteOptionGroup(dishId: string, groupId: string): Promise<void> {
+    await this.http.delete(`/dishes/${dishId}/option-groups/${groupId}`);
+  }
+
+  async updateOption(
+    dishId: string,
+    groupId: string,
+    optionId: string,
+    input: Partial<{ label: string; priceDelta: number; sortOrder: number; isActive: boolean }>,
+  ): Promise<{ id: string }> {
+    return unwrap(
+      await this.http.patch(
+        `/dishes/${dishId}/option-groups/${groupId}/options/${optionId}`,
+        input,
+      ),
+    );
+  }
+
+  async deleteOption(dishId: string, groupId: string, optionId: string): Promise<void> {
+    await this.http.delete(`/dishes/${dishId}/option-groups/${groupId}/options/${optionId}`);
+  }
+
+  // ---- Promotions (dish boost, paid per day via PayChangu) ----
+  async quotePromotion(input: {
+    dishId: string;
+    days: number;
+  }): Promise<{ dishId: string; days: number; dailyRate: number; amountMWK: number }> {
+    return unwrap(await this.http.post('/promotions/quote', input));
+  }
+
+  async createPromotion(input: {
+    dishId: string;
+    headline: string;
+    description?: string;
+    imageUrl?: string;
+    days: number;
+    startsAt?: string;
+  }): Promise<{ id: string; amountMWK: string }> {
+    return unwrap(await this.http.post('/promotions', input));
+  }
+
+  async listMyPromotions(
+    params: { status?: string } = {},
+  ): Promise<{ items: import('@foodiebus/types').Promotion[] }> {
+    return unwrap(await this.http.get('/promotions/me', { params }));
+  }
+
+  async payPromotion(
+    id: string,
+    input: { returnUrl?: string } = {},
+  ): Promise<import('@foodiebus/types').PromotionInlineParams> {
+    return unwrap(await this.http.post(`/promotions/${id}/pay`, input));
+  }
+
+  async verifyPromotion(id: string): Promise<unknown> {
+    return unwrap(await this.http.post(`/promotions/${id}/verify`));
+  }
+
+  async cancelPromotion(id: string): Promise<{ id: string }> {
+    return unwrap(await this.http.post(`/promotions/${id}/cancel`));
+  }
+
+  async listActivePromotions(
+    params: { page?: number; limit?: number; vendorId?: string } = {},
+  ): Promise<{ items: import('@foodiebus/types').ActivePromotion[]; total: number }> {
+    return unwrap(await this.http.get('/promotions/active', { params }));
   }
 
   // ---- Bus ----
@@ -416,8 +581,12 @@ export class Api {
     return unwrap(await this.http.get(`/vendors/${vendorId}/orders`, { params }));
   }
 
-  async updateFoodOrderStatus(id: string, status: FoodOrderStatus): Promise<FoodOrder> {
-    return unwrap(await this.http.patch(`/food-orders/${id}/status`, { status }));
+  async updateFoodOrderStatus(
+    id: string,
+    status: FoodOrderStatus,
+    prepMinutes?: number,
+  ): Promise<FoodOrder> {
+    return unwrap(await this.http.patch(`/food-orders/${id}/status`, { status, prepMinutes }));
   }
 
   // ---- Payments ----

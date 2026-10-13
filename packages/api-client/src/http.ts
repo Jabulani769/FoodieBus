@@ -70,6 +70,17 @@ export function createHttpClient(options: ClientOptions): AxiosInstance {
     if (token) {
       config.headers.set('Authorization', `Bearer ${token}`);
     }
+    // File uploads send FormData. The instance default
+    // 'Content-Type: application/json' would make axios JSON-stringify the
+    // payload ({"file":{}}) and the server rejects it with 406
+    // (FST_INVALID_MULTIPART_CONTENT_TYPE). Setting the header to `false`
+    // keeps the key present-but-empty so later pipeline steps skip it, the
+    // adapter drops it, and the browser sets multipart/form-data with the
+    // boundary itself. (Plain delete() does NOT work: dispatchRequest
+    // force-fills an absent Content-Type with urlencoded.)
+    if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+      config.headers.set('Content-Type', false as unknown as string);
+    }
     return config;
   });
 
