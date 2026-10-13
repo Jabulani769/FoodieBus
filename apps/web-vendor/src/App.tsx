@@ -8,6 +8,7 @@ import { MenuPage } from './vendor/Menu.js';
 import { OrdersPage } from './vendor/Orders.js';
 import { VendorRatings } from './vendor/Ratings.js';
 import { PayoutsPage } from './vendor/Payouts.js';
+import { PromotionsPage } from './vendor/Promotions.js';
 import { ProfilePage } from './pages/Profile.js';
 import { OperatorDashboard } from './operator/Dashboard.js';
 import { BusesPage } from './operator/Buses.js';
@@ -41,6 +42,7 @@ export function App() {
         <Route path="vendor/menu" element={<MenuPage />} />
         <Route path="vendor/orders" element={<OrdersPage />} />
         <Route path="vendor/ratings" element={<VendorRatings />} />
+        <Route path="vendor/promotions" element={<PromotionsPage />} />
         <Route path="vendor/payouts" element={<PayoutsPage />} />
         <Route path="operator" element={<OperatorDashboard />} />
         <Route path="operator/buses" element={<BusesPage />} />

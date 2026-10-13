@@ -1,4 +1,4 @@
-import { Card, Col, Row, Table } from 'antd';
+import { Card, Col, Row, Table, Tag } from 'antd';
 import { useQuery } from '@tanstack/react-query';
 import { FileDoneOutlined, ShopOutlined, WalletOutlined } from '@ant-design/icons';
 import { Api } from '@foodiebus/api-client';
@@ -81,7 +81,24 @@ export function VendorDashboard() {
           </div>
           <div>
             <div style={{ fontWeight: 600, fontSize: 16 }}>
-              {profile?.businessName || 'Your business'}
+              {profile?.businessName || 'Your business'}{' '}
+              {(profile as { storeStatus?: string; storeLabel?: string })?.storeStatus && (
+                <Tag
+                  color={
+                    (profile as { storeStatus?: string }).storeStatus === 'OPEN'
+                      ? 'green'
+                      : (profile as { storeStatus?: string }).storeStatus === 'BUSY'
+                        ? 'orange'
+                        : 'red'
+                  }
+                >
+                  {(profile as { storeLabel?: string }).storeLabel ??
+                    (profile as { storeStatus?: string }).storeStatus}
+                </Tag>
+              )}
+              {(profile as { isPaused?: boolean })?.isPaused && (
+                <Tag color="orange">Busy - Not Accepting Orders</Tag>
+              )}
             </div>
             <div style={{ fontSize: 13, color: colors.text.secondary }}>
               {profile?.description || 'Welcome back, manage your menu and orders below.'}

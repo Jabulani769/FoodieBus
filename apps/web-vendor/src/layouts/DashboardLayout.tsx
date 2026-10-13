@@ -5,6 +5,7 @@ import {
   LogoutOutlined,
   DashboardOutlined,
   FileDoneOutlined,
+  FireOutlined,
   StarOutlined,
   WalletOutlined,
   ScheduleOutlined,
@@ -27,6 +28,7 @@ const TITLES: Record<string, string> = {
   '/vendor/menu': 'Menu',
   '/vendor/orders': 'Orders',
   '/vendor/ratings': 'Ratings',
+  '/vendor/promotions': 'Promotions',
   '/vendor/payouts': 'Payouts',
   '/operator': 'Dashboard',
   '/operator/buses': 'Buses',
@@ -61,6 +63,7 @@ export function DashboardLayout() {
           label: 'Business',
           children: [
             { key: '/vendor/ratings', icon: <StarOutlined />, label: 'Ratings' },
+            { key: '/vendor/promotions', icon: <FireOutlined />, label: 'Promotions' },
             { key: '/vendor/payouts', icon: <WalletOutlined />, label: 'Payouts' },
             { key: '/settings', icon: <SettingOutlined />, label: 'Settings' },
           ],
