@@ -299,7 +299,22 @@ export async function registerPaymentRoutes(app: FastifyInstance): Promise<void>
       }
 
       if (!alreadyHandled) {
-        await paymentService.verifyAndConfirm(txRef);
+        // Promotion payments share the PayChangu webhook but live in the
+        // Promotion table (txRef PROMO-*), not the booking Payment table.
+        if (txRef.startsWith('PROMO-')) {
+          const { paychangu } = await import('./paychangu.js');
+          const { promotionService } = await import('../promotions/promotion.service.js');
+          try {
+            const verified = await paychangu.verify(txRef);
+            if (verified.status === 'success') {
+              await promotionService.confirmByTxRef(txRef);
+            }
+          } catch {
+            // Defer to manual verify; webhook stays 200 so PayChangu stops retrying.
+          }
+        } else {
+          await paymentService.verifyAndConfirm(txRef);
+        }
       }
 
       const payment = await prisma.payment.findUnique({

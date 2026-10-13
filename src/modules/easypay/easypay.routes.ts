@@ -9,6 +9,9 @@ import { easyPayService } from './easypay.service.js';
 import {
   bookBusSchema,
   foodOrderSchema,
+  foodPreviewSchema,
+  kitchenParamsSchema,
+  listKitchensSchema,
   profileUpdateSchema,
   requestOtpSchema,
   verifyOtpSchema,
@@ -82,13 +85,33 @@ export async function registerEasyPayRoutes(app: FastifyInstance): Promise<void>
   });
 
   // ---- Kitchens (vendors) ----
-  app.get('/kitchens', async () => {
-    return easyPayService.listKitchens();
+  app.get('/kitchens', async (request) => {
+    const q = listKitchensSchema.parse({ querystring: request.query ?? {} }).querystring;
+    return easyPayService.listKitchens(q);
+  });
+
+  app.get('/kitchens/categories', async () => {
+    const { prisma: db } = await import('../../shared/db/prisma.js');
+    const items = await db.foodCategory.findMany({
+      where: { isActive: true },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    });
+    // Home screen horizontal selector payload
+    return items.map((c) => ({ id: c.id, name: c.name, slug: c.slug, sort_order: c.sortOrder }));
   });
 
   app.get<{ Params: { id: string } }>('/kitchens/:id/menu', async (request, reply) => {
     const items = await easyPayService.getKitchenMenu(request.params.id);
     return reply.send(items);
+  });
+
+  app.get<{ Params: { id: string } }>('/kitchens/:id/menu-grouped', async (request, reply) => {
+    return reply.send(await easyPayService.getKitchenMenuGrouped(request.params.id));
+  });
+
+  app.get<{ Params: { id: string } }>('/kitchens/:id/status', async (request, reply) => {
+    kitchenParamsSchema.parse(request);
+    return reply.send(await easyPayService.getKitchenStatus(request.params.id));
   });
 
   // ---- Bus ----
@@ -109,12 +132,26 @@ export async function registerEasyPayRoutes(app: FastifyInstance): Promise<void>
   });
 
   // ---- Food orders ----
+  app.post('/orders/food/preview', { preHandler: [authenticate] }, async (request, reply) => {
+    const { body } = foodPreviewSchema.parse(request);
+    return reply.send(await easyPayService.previewFoodOrder(body));
+  });
+
   app.post('/orders/food', { preHandler: [authenticate] }, async (request, reply) => {
     const user = requireUser(request);
     const { body } = foodOrderSchema.parse(request);
     const order = await easyPayService.placeFoodOrder(user, body);
     return reply.code(201).send(order);
   });
+
+  app.get<{ Params: { id: string } }>(
+    '/orders/food/:id/tracking',
+    { preHandler: [authenticate] },
+    async (request, reply) => {
+      const user = requireUser(request);
+      return reply.send(await easyPayService.trackFoodOrder(user.id, request.params.id));
+    },
+  );
 
   // ---- User ----
   app.get('/user/profile', { preHandler: [authenticate] }, async (request, reply) => {
