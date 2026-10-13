@@ -30,6 +30,8 @@ describe('bus module', () => {
     await prisma.driverTripPayout.deleteMany();
     await prisma.refund.deleteMany();
     await prisma.payment.deleteMany();
+    await prisma.dishOption.deleteMany();
+    await prisma.dishOptionGroup.deleteMany();
     await prisma.foodOrderItem.deleteMany();
     await prisma.foodOrder.deleteMany();
     await prisma.booking.deleteMany();
@@ -39,6 +41,7 @@ describe('bus module', () => {
     await prisma.route.deleteMany();
     await prisma.bus.deleteMany();
     await prisma.operatorProfile.deleteMany();
+    await prisma.vendorOperatingHours.deleteMany();
     await prisma.vendorProfile.deleteMany();
     await prisma.foodCategory.deleteMany();
     await prisma.platformSetting.deleteMany();
@@ -112,9 +115,13 @@ describe('bus module', () => {
     });
   }
 
-  async function createRoute(overrides: { fromCity?: string; toCity?: string } = {}) {
+  async function createRoute(
+    overrides: { fromCity?: string; toCity?: string; operatorId?: string } = {},
+  ) {
+    const operatorId = overrides.operatorId ?? (await createOperatorUser()).operatorProfile!.id;
     return prisma.route.create({
       data: {
+        operatorId,
         fromCity: overrides.fromCity ?? 'Lilongwe',
         toCity: overrides.toCity ?? 'Mzuzu',
         basePrice: 15000,
@@ -133,7 +140,7 @@ describe('bus module', () => {
     });
     const route = overrides.routeId
       ? await prisma.route.findUnique({ where: { id: overrides.routeId } })
-      : await createRoute();
+      : await createRoute({ operatorId });
     const bus = overrides.busId
       ? await prisma.bus.findUnique({ where: { id: overrides.busId } })
       : await createBusForOperator(operatorId);
@@ -357,11 +364,18 @@ describe('bus module', () => {
 
     it('POST /bus-routes allows admin to create a route', async () => {
       const token = await createAdminUser();
+      const operator = await createOperatorUser();
       const res = await app.inject({
         method: 'POST',
         url: '/api/v1/bus-routes',
         headers: { authorization: `Bearer ${token}` },
-        payload: { fromCity: 'Blantyre', toCity: 'Zomba', basePrice: 9000, distanceKm: 60 },
+        payload: {
+          fromCity: 'Blantyre',
+          toCity: 'Zomba',
+          basePrice: 9000,
+          distanceKm: 60,
+          operatorId: operator.operatorProfile!.id,
+        },
       });
       expect(res.statusCode).toBe(201);
       expect(res.json().id).toBeTypeOf('string');
@@ -369,12 +383,18 @@ describe('bus module', () => {
 
     it('POST /bus-routes rejects a duplicate route with 409', async () => {
       const token = await createAdminUser();
-      await createRoute();
+      const operator = await createOperatorUser();
+      await createRoute({ operatorId: operator.operatorProfile!.id });
       const res = await app.inject({
         method: 'POST',
         url: '/api/v1/bus-routes',
         headers: { authorization: `Bearer ${token}` },
-        payload: { fromCity: 'Lilongwe', toCity: 'Mzuzu', basePrice: 15000 },
+        payload: {
+          fromCity: 'Lilongwe',
+          toCity: 'Mzuzu',
+          basePrice: 15000,
+          operatorId: operator.operatorProfile!.id,
+        },
       });
       expect(res.statusCode).toBe(409);
     });
@@ -430,7 +450,7 @@ describe('bus module', () => {
   describe('Trips', () => {
     it('POST /trips creates a trip and auto-generates seat inventory', async () => {
       const operator = await createOperatorUser();
-      const route = await createRoute();
+      const route = await createRoute({ operatorId: operator.operatorProfile!.id });
       const bus = await createBusForOperator(operator.operatorProfile!.id, { capacity: 4 });
       const res = await app.inject({
         method: 'POST',
@@ -474,7 +494,7 @@ describe('bus module', () => {
     it('POST /trips forbids using another operator bus', async () => {
       const operator = await createOperatorUser();
       const other = await createOperatorUser('Other Operator');
-      const route = await createRoute();
+      const route = await createRoute({ operatorId: operator.operatorProfile!.id });
       const bus = await createBusForOperator(other.operatorProfile!.id);
       const res = await app.inject({
         method: 'POST',
@@ -1012,7 +1032,11 @@ describe('bus module', () => {
     it('PATCH /trips/:id/location rejects a driver not assigned to the trip', async () => {
       const { tripId } = await createDriverTrip('IN_TRANSIT');
       const other = await createOperatorUser();
-      const otherRoute = await createRoute({ fromCity: 'Blantyre', toCity: 'Zomba' });
+      const otherRoute = await createRoute({
+        fromCity: 'Blantyre',
+        toCity: 'Zomba',
+        operatorId: other.operatorProfile!.id,
+      });
       const otherTrip = await createTripForOperator(other.operatorProfile!.id, {
         routeId: otherRoute.id,
       });

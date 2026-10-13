@@ -32,6 +32,8 @@ describe('admin module', () => {
     await prisma.otpCode.deleteMany();
     await prisma.notification.deleteMany();
     await prisma.payment.deleteMany();
+    await prisma.dishOption.deleteMany();
+    await prisma.dishOptionGroup.deleteMany();
     await prisma.foodOrderItem.deleteMany();
     await prisma.foodOrder.deleteMany();
     await prisma.booking.deleteMany();
@@ -40,6 +42,7 @@ describe('admin module', () => {
     await prisma.route.deleteMany();
     await prisma.bus.deleteMany();
     await prisma.operatorProfile.deleteMany();
+    await prisma.vendorOperatingHours.deleteMany();
     await prisma.vendorProfile.deleteMany();
     await prisma.foodCategory.deleteMany();
     await prisma.refreshToken.deleteMany();

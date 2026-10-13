@@ -26,6 +26,8 @@ describe('bus module — multi-stop routes', () => {
     await prisma.driverTripPayout.deleteMany();
     await prisma.refund.deleteMany();
     await prisma.payment.deleteMany();
+    await prisma.dishOption.deleteMany();
+    await prisma.dishOptionGroup.deleteMany();
     await prisma.foodOrderItem.deleteMany();
     await prisma.foodOrder.deleteMany();
     await prisma.booking.deleteMany();
@@ -35,6 +37,7 @@ describe('bus module — multi-stop routes', () => {
     await prisma.route.deleteMany();
     await prisma.bus.deleteMany();
     await prisma.operatorProfile.deleteMany();
+    await prisma.vendorOperatingHours.deleteMany();
     await prisma.vendorProfile.deleteMany();
     await prisma.foodCategory.deleteMany();
     await prisma.platformSetting.deleteMany();
@@ -105,9 +108,13 @@ describe('bus module — multi-stop routes', () => {
     });
   }
 
-  async function createRoute(overrides: { fromCity?: string; toCity?: string } = {}) {
+  async function createRoute(
+    overrides: { fromCity?: string; toCity?: string; operatorId?: string } = {},
+  ) {
+    const operatorId = overrides.operatorId ?? (await createOperatorUser()).operatorProfile!.id;
     return prisma.route.create({
       data: {
+        operatorId,
         fromCity: overrides.fromCity ?? 'Blantyre',
         toCity: overrides.toCity ?? 'Mzuzu',
         basePrice: 30000,
@@ -126,7 +133,7 @@ describe('bus module — multi-stop routes', () => {
     });
     const route = overrides.routeId
       ? await prisma.route.findUnique({ where: { id: overrides.routeId } })
-      : await createRoute();
+      : await createRoute({ operatorId });
     const bus = overrides.busId
       ? await prisma.bus.findUnique({ where: { id: overrides.busId } })
       : await createBusForOperator(operatorId);
@@ -266,7 +273,12 @@ describe('bus module — multi-stop routes', () => {
   describe('Segment booking', () => {
     async function setup() {
       const token = await createAdminUser();
-      const route = await createRoute({ fromCity: 'Blantyre', toCity: 'Mzuzu' });
+      const operator = await createOperatorUser();
+      const route = await createRoute({
+        fromCity: 'Blantyre',
+        toCity: 'Mzuzu',
+        operatorId: operator.operatorProfile!.id,
+      });
       await setStops(
         route.id,
         [
@@ -280,7 +292,6 @@ describe('bus module — multi-stop routes', () => {
         where: { routeId: route.id },
         orderBy: { order: 'asc' },
       });
-      const operator = await createOperatorUser();
       const trip = await createTripForOperator(operator.operatorProfile!.id, { routeId: route.id });
       return { route, stops, trip, operator };
     }
@@ -410,7 +421,12 @@ describe('bus module — multi-stop routes', () => {
   describe('Segment seat overlap', () => {
     async function setup() {
       const token = await createAdminUser();
-      const route = await createRoute({ fromCity: 'Blantyre', toCity: 'Mzuzu' });
+      const operator = await createOperatorUser();
+      const route = await createRoute({
+        fromCity: 'Blantyre',
+        toCity: 'Mzuzu',
+        operatorId: operator.operatorProfile!.id,
+      });
       await setStops(
         route.id,
         [
@@ -424,7 +440,6 @@ describe('bus module — multi-stop routes', () => {
         where: { routeId: route.id },
         orderBy: { order: 'asc' },
       });
-      const operator = await createOperatorUser();
       const trip = await createTripForOperator(operator.operatorProfile!.id, { routeId: route.id });
       return { stops, trip };
     }
@@ -525,7 +540,12 @@ describe('bus module — multi-stop routes', () => {
   describe('Multi-stop search', () => {
     it('finds a trip when searching by an intermediate stop', async () => {
       const token = await createAdminUser();
-      const route = await createRoute({ fromCity: 'Blantyre', toCity: 'Mzuzu' });
+      const operator = await createOperatorUser();
+      const route = await createRoute({
+        fromCity: 'Blantyre',
+        toCity: 'Mzuzu',
+        operatorId: operator.operatorProfile!.id,
+      });
       await setStops(
         route.id,
         [
@@ -535,7 +555,6 @@ describe('bus module — multi-stop routes', () => {
         ],
         token,
       );
-      const operator = await createOperatorUser();
       const trip = await createTripForOperator(operator.operatorProfile!.id, { routeId: route.id });
       const res = await app.inject({
         method: 'GET',
@@ -548,7 +567,12 @@ describe('bus module — multi-stop routes', () => {
 
     it('returns the stops on each search result', async () => {
       const token = await createAdminUser();
-      const route = await createRoute({ fromCity: 'Blantyre', toCity: 'Mzuzu' });
+      const operator = await createOperatorUser();
+      const route = await createRoute({
+        fromCity: 'Blantyre',
+        toCity: 'Mzuzu',
+        operatorId: operator.operatorProfile!.id,
+      });
       await setStops(
         route.id,
         [
@@ -558,7 +582,6 @@ describe('bus module — multi-stop routes', () => {
         ],
         token,
       );
-      const operator = await createOperatorUser();
       const trip = await createTripForOperator(operator.operatorProfile!.id, { routeId: route.id });
       const res = await app.inject({
         method: 'GET',

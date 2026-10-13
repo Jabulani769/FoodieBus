@@ -28,6 +28,8 @@ describe('food module', () => {
 
     await prisma.driverTripPayout.deleteMany();
     await prisma.payment.deleteMany();
+    await prisma.dishOption.deleteMany();
+    await prisma.dishOptionGroup.deleteMany();
     await prisma.foodOrderItem.deleteMany();
     await prisma.foodOrder.deleteMany();
     await prisma.booking.deleteMany();
@@ -37,6 +39,7 @@ describe('food module', () => {
     await prisma.bus.deleteMany();
     await prisma.operatorProfile.deleteMany();
     await prisma.dish.deleteMany();
+    await prisma.vendorOperatingHours.deleteMany();
     await prisma.vendorProfile.deleteMany();
     await prisma.foodCategory.deleteMany();
     await prisma.refreshToken.deleteMany();

@@ -26,6 +26,8 @@ describe('easypay adapter', () => {
     await prisma.reconciliationMismatch.deleteMany();
     await prisma.driverTripPayout.deleteMany();
     await prisma.payment.deleteMany();
+    await prisma.dishOption.deleteMany();
+    await prisma.dishOptionGroup.deleteMany();
     await prisma.foodOrderItem.deleteMany();
     await prisma.foodOrder.deleteMany();
     await prisma.booking.deleteMany();
@@ -35,6 +37,7 @@ describe('easypay adapter', () => {
     await prisma.bus.deleteMany();
     await prisma.operatorProfile.deleteMany();
     await prisma.dish.deleteMany();
+    await prisma.vendorOperatingHours.deleteMany();
     await prisma.vendorProfile.deleteMany();
     await prisma.foodCategory.deleteMany();
     await prisma.refreshToken.deleteMany();
@@ -103,7 +106,7 @@ describe('easypay adapter', () => {
     );
     const operator = await prisma.operatorProfile.findUniqueOrThrow({ where: { userId: op.id } });
     const route = await prisma.route.create({
-      data: { fromCity: 'Blantyre', toCity: 'Lilongwe', basePrice: 15000 },
+      data: { fromCity: 'Blantyre', toCity: 'Lilongwe', basePrice: 15000, operatorId: operator.id },
     });
     const bus = await prisma.bus.create({
       data: {
@@ -374,7 +377,8 @@ describe('easypay adapter', () => {
       const body = res.json() as Record<string, unknown>;
       expect(body).toMatchObject({
         order_id: expect.any(String),
-        status: 'preparing',
+        status: 'pending',
+        status_upper: 'PLACED',
         estimated_delivery_minutes: 30,
       });
     });

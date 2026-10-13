@@ -28,6 +28,8 @@ describe('delivery module', () => {
     await prisma.reconciliationMismatch.deleteMany();
 
     await prisma.driverTripPayout.deleteMany();
+    await prisma.dishOption.deleteMany();
+    await prisma.dishOptionGroup.deleteMany();
     await prisma.foodOrderItem.deleteMany();
     await prisma.foodOrder.deleteMany();
     await prisma.payment.deleteMany();
@@ -40,6 +42,7 @@ describe('delivery module', () => {
     await prisma.operatorProfile.deleteMany();
     await prisma.dish.deleteMany();
     await prisma.foodCategory.deleteMany();
+    await prisma.vendorOperatingHours.deleteMany();
     await prisma.vendorProfile.deleteMany();
     await prisma.refreshToken.deleteMany();
     await prisma.auditLog.deleteMany();
@@ -111,14 +114,20 @@ describe('delivery module', () => {
     });
   }
 
-  async function createRoute() {
+  async function createRoute(operatorId: string) {
     return prisma.route.create({
-      data: { fromCity: 'Lilongwe', toCity: 'Mzuzu', basePrice: 15000, distanceKm: 350 },
+      data: {
+        fromCity: 'Lilongwe',
+        toCity: 'Mzuzu',
+        basePrice: 15000,
+        distanceKm: 350,
+        operatorId,
+      },
     });
   }
 
   async function createTripForOperator(operatorId: string) {
-    const route = await createRoute();
+    const route = await createRoute(operatorId);
     const bus = await createBusForOperator(operatorId);
     const trip = await busService.createTrip(operatorId, {
       routeId: route.id,
