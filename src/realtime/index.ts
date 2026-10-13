@@ -16,6 +16,8 @@ export interface FoodOrderStatusEvent {
   orderId: string;
   status: string;
   vendorName: string;
+  prepMinutes?: number;
+  estimatedReadyAt?: string;
 }
 
 export interface TripLocationEvent {

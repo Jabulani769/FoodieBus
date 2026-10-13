@@ -24,8 +24,11 @@ export class MockStorageProvider implements StorageProvider {
     const filePath = this.filePath(params.key);
     await mkdir(resolve(filePath, '..'), { recursive: true });
     await pipeline(params.body, createWriteStream(filePath));
-    const base =
-      env.PUBLIC_URL ?? process.env.RENDER_EXTERNAL_URL ?? `http://${env.HOST}:${env.PORT}`;
+    // HOST is often 0.0.0.0 (bind-all), which is not a dialable address for
+    // browsers — uploaded-image previews would spin forever. Map wildcards
+    // to localhost so the returned URL actually loads in the dashboards.
+    const host = env.HOST === '0.0.0.0' || env.HOST === '::' ? 'localhost' : env.HOST;
+    const base = env.PUBLIC_URL ?? process.env.RENDER_EXTERNAL_URL ?? `http://${host}:${env.PORT}`;
     return { url: `${base}/uploads/${params.key}` };
   }
 

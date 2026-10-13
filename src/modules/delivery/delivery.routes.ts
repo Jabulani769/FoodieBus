@@ -25,7 +25,7 @@ export async function registerDeliveryRoutes(app: FastifyInstance): Promise<void
       preHandler: [authenticate],
       schema: {
         tags: ['delivery'],
-        summary: 'Place a food order for a confirmed booking',
+        summary: 'Place a food order for a confirmed booking (customizations + geofence)',
         security: [{ bearerAuth: [] }],
         body: {
           type: 'object',
@@ -35,12 +35,27 @@ export async function registerDeliveryRoutes(app: FastifyInstance): Promise<void
               type: 'array',
               items: {
                 type: 'object',
-                properties: { dishId: { type: 'string' }, quantity: { type: 'integer' } },
+                properties: {
+                  dishId: { type: 'string' },
+                  quantity: { type: 'integer' },
+                  selectedOptions: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        groupId: { type: 'string' },
+                        optionIds: { type: 'array', items: { type: 'string' } },
+                      },
+                    },
+                  },
+                },
                 required: ['dishId', 'quantity'],
               },
             },
             note: { type: 'string' },
             couponCode: { type: 'string' },
+            deliveryLat: { type: 'number' },
+            deliveryLng: { type: 'number' },
           },
           required: ['bookingId', 'items'],
         },
@@ -104,7 +119,7 @@ export async function registerDeliveryRoutes(app: FastifyInstance): Promise<void
       preHandler: [authenticate, authorize('VENDOR')],
       schema: {
         tags: ['delivery'],
-        summary: 'Update a food order status (vendor only)',
+        summary: 'Update a food order status with fulfillment window (KDS)',
         security: [{ bearerAuth: [] }],
         params: { type: 'object', properties: { id: { type: 'string' } } },
         body: {
@@ -114,6 +129,7 @@ export async function registerDeliveryRoutes(app: FastifyInstance): Promise<void
               type: 'string',
               enum: ['PLACED', 'PREPARING', 'READY', 'DELIVERED_TO_BUS', 'CANCELLED'],
             },
+            prepMinutes: { type: 'integer', minimum: 5, maximum: 180 },
           },
           required: ['status'],
         },
@@ -124,7 +140,12 @@ export async function registerDeliveryRoutes(app: FastifyInstance): Promise<void
       const actor = requireUser(request);
       const parsed = updateFoodOrderStatusSchema.parse(request);
       return reply.send(
-        await deliveryService.updateFoodOrderStatus(parsed.params.id, parsed.body.status, actor.id),
+        await deliveryService.updateFoodOrderStatus(
+          parsed.params.id,
+          parsed.body.status,
+          actor.id,
+          parsed.body.prepMinutes,
+        ),
       );
     },
   );

@@ -3,15 +3,24 @@ import { AppError } from '../../shared/errors/AppError.js';
 import { writeAuditLog } from '../../shared/audit/audit.js';
 import { emitFoodOrderStatus } from '../../realtime/index.js';
 import { couponService } from '../coupons/coupon.service.js';
+import { assertVendorAcceptingOrders } from '../../shared/vendor-status.js';
+import { haversineKm } from '../../shared/geo.js';
 import type { FoodOrderStatus } from '../../generated/prisma/enums.js';
 
 const STATUS_FLOW: FoodOrderStatus[] = ['PLACED', 'PREPARING', 'READY', 'DELIVERED_TO_BUS'];
 
+export interface SelectedOptionInput {
+  groupId: string;
+  optionIds: string[];
+}
+
 export interface PlaceFoodOrderInput {
   bookingId: string;
-  items: { dishId: string; quantity: number }[];
+  items: { dishId: string; quantity: number; selectedOptions?: SelectedOptionInput[] }[];
   note?: string;
   couponCode?: string;
+  deliveryLat?: number;
+  deliveryLng?: number;
 }
 
 export class DeliveryService {
@@ -34,13 +43,21 @@ export class DeliveryService {
     }
 
     const dishIds = data.items.map((i) => i.dishId);
-    const dishes = await prisma.dish.findMany({ where: { id: { in: dishIds } } });
+    const dishes = await prisma.dish.findMany({
+      where: { id: { in: dishIds } },
+      include: {
+        optionGroups: {
+          where: { isActive: true },
+          include: { options: { where: { isActive: true } } },
+        },
+      },
+    });
     if (dishes.length !== dishIds.length) {
       throw AppError.notFound('One or more dishes were not found');
     }
     for (const dish of dishes) {
       if (!dish.isAvailable) {
-        throw AppError.conflict(`Dish "${dish.name}" is currently unavailable`);
+        throw AppError.conflict(`Dish "${dish.name}" is currently unavailable (Unavailable Today)`);
       }
     }
 
@@ -51,10 +68,90 @@ export class DeliveryService {
     }
     const vendorId = [...vendorIds][0]!;
 
+    // Store status guard: closed/busy locks checkout (browse allowed elsewhere)
+    await assertVendorAcceptingOrders(vendorId);
+
+    // Geofence guard if delivery coords provided
+    if (data.deliveryLat !== undefined && data.deliveryLng !== undefined) {
+      const vendor = await prisma.vendorProfile.findUnique({ where: { id: vendorId } });
+      if (vendor?.latitude != null && vendor?.longitude != null) {
+        const dist = haversineKm(
+          data.deliveryLat,
+          data.deliveryLng,
+          vendor.latitude,
+          vendor.longitude,
+        );
+        const radius = vendor.deliveryRadiusKm ?? 5;
+        if (dist > radius) {
+          throw AppError.conflict(
+            `Delivery location is ${dist.toFixed(1)} km away — outside the ${radius} km delivery radius`,
+          );
+        }
+      }
+    }
+
+    // Validate customizations + compute totals: base + sum(deltas)
     let total = 0;
+    const lineDetails: {
+      dishId: string;
+      quantity: number;
+      unitPrice: number;
+      lineTotal: number;
+      selectedOptions: unknown;
+    }[] = [];
     for (const item of data.items) {
       const dish = dishMap.get(item.dishId)!;
-      total += Number(dish.price) * item.quantity;
+      const base = Number(dish.price);
+      let deltaPerUnit = 0;
+      const selected = item.selectedOptions ?? [];
+
+      // Build group lookup
+      const groupMap = new Map(dish.optionGroups.map((g) => [g.id, g]));
+      // Required groups must be settled
+      for (const g of dish.optionGroups) {
+        if (g.isRequired) {
+          const found = selected.find((s) => s.groupId === g.id);
+          if (!found || found.optionIds.length === 0) {
+            throw AppError.validation(`Required selection missing: ${g.name} for "${dish.name}"`);
+          }
+        }
+      }
+      for (const sel of selected) {
+        const group = groupMap.get(sel.groupId);
+        if (!group) throw AppError.validation(`Invalid option group for "${dish.name}"`);
+        const validIds = new Set(group.options.map((o) => o.id));
+        for (const oid of sel.optionIds) {
+          if (!validIds.has(oid)) {
+            throw AppError.validation(`Invalid option selected for "${dish.name}" (${group.name})`);
+          }
+        }
+        if (group.type === 'SINGLE' && sel.optionIds.length !== 1) {
+          throw AppError.validation(`"${group.name}" requires exactly one choice (radio)`);
+        }
+        const min = group.minSelect ?? 0;
+        const max = group.maxSelect ?? (group.type === 'SINGLE' ? 1 : 99);
+        if (sel.optionIds.length < min) {
+          throw AppError.validation(`"${group.name}" needs at least ${min} choice(s)`);
+        }
+        if (sel.optionIds.length > max) {
+          throw AppError.validation(`"${group.name}" allows at most ${max} choice(s)`);
+        }
+        for (const oid of sel.optionIds) {
+          const opt = group.options.find((o) => o.id === oid)!;
+          deltaPerUnit += Number(opt.priceDelta);
+        }
+      }
+
+      const unitTotal = base + deltaPerUnit;
+      const lineTotal = unitTotal * item.quantity;
+      total += lineTotal;
+      lineDetails.push({
+        dishId: item.dishId,
+        quantity: item.quantity,
+        unitPrice: unitTotal,
+        lineTotal,
+        selectedOptions: selected,
+      });
     }
 
     const order = await prisma.$transaction(async (tx) => {
@@ -89,15 +186,14 @@ export class DeliveryService {
         },
       });
       await tx.foodOrderItem.createMany({
-        data: data.items.map((item) => {
-          const dish = dishMap.get(item.dishId)!;
-          return {
-            foodOrderId: created.id,
-            dishId: item.dishId,
-            quantity: item.quantity,
-            unitPrice: dish.price,
-          };
-        }),
+        data: lineDetails.map((l) => ({
+          foodOrderId: created.id,
+          dishId: l.dishId,
+          quantity: l.quantity,
+          unitPrice: l.unitPrice,
+          lineTotal: l.lineTotal,
+          selectedOptions: l.selectedOptions as object,
+        })),
       });
       return created;
     });
@@ -111,7 +207,7 @@ export class DeliveryService {
       include: this.orderInclude(),
       orderBy: { createdAt: 'desc' },
     });
-    return { items };
+    return { items: items.map((o) => this.toTracker(o)) };
   }
 
   async getFoodOrderDetail(
@@ -135,13 +231,32 @@ export class DeliveryService {
     if (!isPassenger && !isVendor && !isOperator) {
       throw AppError.forbidden('You can only view your own food orders');
     }
-    return order;
+    return this.toTracker(order);
+  }
+
+  /** Live tracker shape: Pending/Accepted/Ready copy without refresh. */
+  private toTracker(
+    order: Record<string, unknown> & {
+      status: string;
+      prepMinutes?: number | null;
+      estimatedReadyAt?: Date | null;
+    },
+  ) {
+    const copy: Record<string, string> = {
+      PLACED: 'Waiting for restaurant confirmation...',
+      PREPARING: 'Kitchen is preparing your order',
+      READY: 'Your food is ready! Driver is on the way.',
+      DELIVERED_TO_BUS: 'Delivered to bus. Enjoy!',
+      CANCELLED: 'Order was cancelled',
+    };
+    return { ...order, trackerMessage: copy[order.status] ?? order.status };
   }
 
   async updateFoodOrderStatus(
     orderId: string,
     newStatus: FoodOrderStatus,
     vendorUserId: string,
+    prepMinutes?: number,
   ): Promise<unknown> {
     const order = await prisma.foodOrder.findUnique({
       where: { id: orderId },
@@ -166,19 +281,38 @@ export class DeliveryService {
       );
     }
 
-    await prisma.foodOrder.update({ where: { id: orderId }, data: { status: newStatus } });
+    const now = new Date();
+    const patch: Record<string, unknown> = { status: newStatus };
+    if (newStatus === 'PREPARING') {
+      patch.acceptedAt = now;
+      if (prepMinutes) {
+        patch.prepMinutes = prepMinutes;
+        patch.estimatedReadyAt = new Date(now.getTime() + prepMinutes * 60_000);
+      }
+    }
+    if (newStatus === 'READY') {
+      patch.readyAt = now;
+      // Vendor may set/refresh window when marking ready
+      if (prepMinutes) patch.prepMinutes = prepMinutes;
+    }
+
+    await prisma.foodOrder.update({ where: { id: orderId }, data: patch });
     await writeAuditLog({
       actorId: vendorUserId,
       action: 'food_order.status',
       entity: 'food_order',
       entityId: orderId,
-      details: { from: order.status, to: newStatus },
+      details: { from: order.status, to: newStatus, prepMinutes },
     });
 
+    const updated = await prisma.foodOrder.findUnique({ where: { id: orderId } });
     emitFoodOrderStatus(order.passengerId, {
       orderId: order.id,
       status: newStatus,
       vendorName: order.vendor.businessName,
+      prepMinutes: (updated?.prepMinutes as number | undefined) ?? prepMinutes,
+      estimatedReadyAt:
+        (updated?.estimatedReadyAt as Date | undefined)?.toISOString?.() ?? undefined,
     });
 
     return this.getFoodOrderDetail(orderId, vendorUserId, 'VENDOR');

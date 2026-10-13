@@ -8,6 +8,11 @@ const foodOrderStatusSchema = z.enum([
   'CANCELLED',
 ]);
 
+const selectedOptionSchema = z.object({
+  groupId: z.string().uuid('Invalid group id'),
+  optionIds: z.array(z.string().uuid('Invalid option id')).min(1).max(20),
+});
+
 export const placeFoodOrderSchema = z.object({
   body: z.object({
     bookingId: z.string().uuid('Invalid booking id'),
@@ -16,6 +21,7 @@ export const placeFoodOrderSchema = z.object({
         z.object({
           dishId: z.string().uuid('Invalid dish id'),
           quantity: z.number().int().min(1).max(50),
+          selectedOptions: z.array(selectedOptionSchema).max(20).optional(),
         }),
       )
       .min(1, 'At least one item is required'),
@@ -26,6 +32,8 @@ export const placeFoodOrderSchema = z.object({
       .max(50)
       .transform((s) => s.trim().toUpperCase())
       .optional(),
+    deliveryLat: z.number().min(-90).max(90).optional(),
+    deliveryLng: z.number().min(-180).max(180).optional(),
   }),
 });
 
@@ -37,6 +45,7 @@ export const updateFoodOrderStatusSchema = z.object({
   params: z.object({ id: z.string().uuid('Invalid food order id') }),
   body: z.object({
     status: foodOrderStatusSchema,
+    prepMinutes: z.number().int().min(5).max(180).optional(),
   }),
 });
 
