@@ -89,26 +89,50 @@ model FoodCategory {
 }
 
 model VendorProfile {
-  id           String   @id @default(uuid())
-  userId       String   @unique
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  businessName String
-  description  String?
-  phone        String?
-  logoUrl      String?
-  bannerUrl    String?
-  cuisineType  String?
-  deliveryTime Int?
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id               String   @id @default(uuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessName     String
+  description      String?
+  phone            String?
+  logoUrl          String?
+  bannerUrl        String?
+  cuisineType      String?
+  deliveryTime     Int?
+  address          String?
+  city             String?
+  latitude         Float?
+  longitude        Float?
+  deliveryRadiusKm Float?   @default(5)
+  isActive         Boolean  @default(true)
+  isPaused         Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  dishes      Dish[]
-  settlements Settlement[]
-  foodOrders  FoodOrder[]
-  favorites   Favorite[]
+  dishes         Dish[]
+  settlements    Settlement[]
+  foodOrders     FoodOrder[]
+  favorites      Favorite[]
+  operatingHours VendorOperatingHours[]
+  promotions     Promotion[]
 
   @@index([isActive])
+  @@index([isPaused])
+}
+
+model VendorOperatingHours {
+  id        String   @id @default(uuid())
+  vendorId  String
+  vendor    VendorProfile @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  dayOfWeek Int // 0=Sunday .. 6=Saturday
+  openTime  String // "10:00" 24h HH:mm
+  closeTime String // "22:00" 24h HH:mm
+  isClosed  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([vendorId, dayOfWeek])
+  @@index([vendorId])
 }
 
 model Dish {
@@ -130,11 +154,53 @@ model Dish {
 
   foodOrderItems FoodOrderItem[]
   favorites      Favorite[]
+  optionGroups   DishOptionGroup[]
+  promotions     Promotion[]
 
   @@index([vendorId])
   @@index([categoryId])
   @@index([isAvailable])
   @@index([vendorId, isAvailable])
+}
+
+enum DishOptionGroupType {
+  SINGLE
+  MULTI
+}
+
+model DishOptionGroup {
+  id         String               @id @default(uuid())
+  dishId     String
+  dish       Dish                 @relation(fields: [dishId], references: [id], onDelete: Cascade)
+  name       String // e.g. "Choice of Patty"
+  type       DishOptionGroupType  @default(SINGLE)
+  isRequired Boolean              @default(false)
+  minSelect  Int                  @default(0)
+  maxSelect  Int?
+  sortOrder  Int                  @default(0)
+  isActive   Boolean              @default(true)
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+
+  options DishOption[]
+
+  @@index([dishId])
+  @@index([dishId, isActive])
+}
+
+model DishOption {
+  id         String          @id @default(uuid())
+  groupId    String
+  group      DishOptionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  label      String // e.g. "Double"
+  priceDelta Decimal         @default(0) @db.Decimal(10, 2)
+  sortOrder  Int             @default(0)
+  isActive   Boolean         @default(true)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  @@index([groupId])
+  @@index([groupId, isActive])
 }
 
 model RefreshToken {
@@ -210,6 +276,7 @@ model OperatorProfile {
   updatedAt     DateTime @updatedAt
 
   buses       Bus[]
+  routes      Route[]
   trips       Trip[]
   settlements Settlement[]
   drivers     DriverProfile[]
@@ -242,13 +309,16 @@ model Route {
   basePrice  Decimal  @db.Decimal(10, 2)
   distanceKm Int?
   isActive   Boolean  @default(true)
+  operatorId String
+  operator   OperatorProfile @relation(fields: [operatorId], references: [id], onDelete: Cascade)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
   trips Trip[]
   stops RouteStop[]
 
-  @@unique([fromCity, toCity])
+  @@unique([operatorId, fromCity, toCity])
+  @@index([operatorId])
   @@index([fromCity])
   @@index([toCity])
   @@index([isActive])
@@ -591,22 +661,26 @@ model DriverProfile {
 }
 
 model FoodOrder {
-  id             String          @id @default(uuid())
-  bookingId      String
-  booking        Booking         @relation(fields: [bookingId], references: [id])
-  passengerId    String
-  passenger      User            @relation(fields: [passengerId], references: [id])
-  tripId         String
-  trip           Trip            @relation(fields: [tripId], references: [id])
-  vendorId       String
-  vendor         VendorProfile   @relation(fields: [vendorId], references: [id])
-  status         FoodOrderStatus @default(PLACED)
-  totalAmount    Decimal         @db.Decimal(10, 2)
-  couponCode     String?
-  discountAmount Decimal         @default(0) @db.Decimal(10, 2)
-  note           String?
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  id               String          @id @default(uuid())
+  bookingId        String
+  booking          Booking         @relation(fields: [bookingId], references: [id])
+  passengerId      String
+  passenger        User            @relation(fields: [passengerId], references: [id])
+  tripId           String
+  trip             Trip            @relation(fields: [tripId], references: [id])
+  vendorId         String
+  vendor           VendorProfile   @relation(fields: [vendorId], references: [id])
+  status           FoodOrderStatus @default(PLACED)
+  totalAmount      Decimal         @db.Decimal(10, 2)
+  couponCode       String?
+  discountAmount   Decimal         @default(0) @db.Decimal(10, 2)
+  note             String?
+  prepMinutes      Int?
+  estimatedReadyAt DateTime?
+  acceptedAt       DateTime?
+  readyAt          DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
 
   items FoodOrderItem[]
 
@@ -618,14 +692,16 @@ model FoodOrder {
 }
 
 model FoodOrderItem {
-  id          String    @id @default(uuid())
-  foodOrderId String
-  foodOrder   FoodOrder @relation(fields: [foodOrderId], references: [id], onDelete: Cascade)
-  dishId      String
-  dish        Dish      @relation(fields: [dishId], references: [id])
-  quantity    Int
-  unitPrice   Decimal   @db.Decimal(10, 2)
-  createdAt   DateTime  @default(now())
+  id              String    @id @default(uuid())
+  foodOrderId     String
+  foodOrder       FoodOrder @relation(fields: [foodOrderId], references: [id], onDelete: Cascade)
+  dishId          String
+  dish            Dish      @relation(fields: [dishId], references: [id])
+  quantity        Int
+  unitPrice       Decimal   @db.Decimal(10, 2)
+  selectedOptions Json?
+  lineTotal       Decimal?  @db.Decimal(10, 2)
+  createdAt       DateTime  @default(now())
 
   @@index([foodOrderId])
   @@index([dishId])
@@ -711,4 +787,37 @@ model Favorite {
   createdAt DateTime       @default(now())
 
   @@index([userId])
+}
+
+enum PromotionStatus {
+  DRAFT
+  PENDING_PAYMENT
+  SCHEDULED
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+model Promotion {
+  id          String          @id @default(uuid())
+  vendorId    String
+  vendor      VendorProfile   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  dishId      String
+  dish        Dish            @relation(fields: [dishId], references: [id], onDelete: Cascade)
+  headline    String
+  description String?
+  imageUrl    String?
+  days        Int
+  amountMWK   Decimal         @db.Decimal(10, 2)
+  startsAt    DateTime
+  endsAt      DateTime
+  status      PromotionStatus @default(PENDING_PAYMENT)
+  txRef       String?         @unique
+  paymentId   String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([vendorId, status])
+  @@index([status, endsAt])
+  @@index([dishId, status])
 }
