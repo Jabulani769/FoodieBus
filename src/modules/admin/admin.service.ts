@@ -159,6 +159,12 @@ export class AdminService {
     const vendor = await prisma.vendorProfile.findUnique({ where: { id: vendorId } });
     if (!vendor) throw AppError.notFound('Vendor not found');
     const isActive = !vendor.isActive;
+    // Shop location is vendor-owned and mandatory: block activation without a pin.
+    if (isActive && (vendor.latitude == null || vendor.longitude == null)) {
+      throw AppError.validation(
+        'Vendor has no shop location yet. Ask the vendor to set the pin in Profile & Settings before approving.',
+      );
+    }
     await prisma.vendorProfile.update({ where: { id: vendorId }, data: { isActive } });
     await writeAuditLog({
       actorId,

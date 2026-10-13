@@ -379,9 +379,11 @@ export async function registerBusRoutes(app: FastifyInstance): Promise<void> {
   app.get(
     '/bus-routes',
     {
+      preHandler: [authenticateOptional],
       schema: {
         tags: ['bus'],
-        summary: 'List active routes',
+        summary:
+          'List routes (scoped by caller: own routes for operators, all for admins, active for public)',
         response: {
           200: {
             type: 'object',
@@ -396,6 +398,14 @@ export async function registerBusRoutes(app: FastifyInstance): Promise<void> {
                     toCity: { type: 'string' },
                     basePrice: { type: 'string' },
                     distanceKm: { type: 'integer' },
+                    isActive: { type: 'boolean' },
+                    operator: {
+                      type: 'object',
+                      properties: {
+                        id: { type: 'string' },
+                        businessName: { type: 'string' },
+                      },
+                    },
                     stops: {
                       type: 'array',
                       items: {
@@ -417,8 +427,23 @@ export async function registerBusRoutes(app: FastifyInstance): Promise<void> {
         },
       },
     },
-    async (_request, reply) => {
-      const result = await busService.listRoutes();
+    async (request, reply) => {
+      const user = request.user;
+      let operatorId: string | undefined;
+      let includeOperator = false;
+      let includeInactive = false;
+
+      if (user) {
+        if (user.role === 'OPERATOR') {
+          operatorId = await requireOperatorId(user.id);
+          includeInactive = true;
+        } else if (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') {
+          includeOperator = true;
+          includeInactive = true;
+        }
+      }
+
+      const result = await busService.listRoutes({ operatorId, includeOperator, includeInactive });
       return reply.send(result);
     },
   );
@@ -447,13 +472,35 @@ export async function registerBusRoutes(app: FastifyInstance): Promise<void> {
     async (request: FastifyRequest, reply) => {
       const actor = requireUser(request);
       const data = createRouteSchema.parse({ body: request.body }).body;
-      const route = await busService.createRoute(data);
+
+      let operatorId: string;
+      if (actor.role === 'OPERATOR') {
+        operatorId = await requireOperatorId(actor.id);
+      } else {
+        if (!data.operatorId) {
+          throw AppError.validation(
+            'operatorId is required to create a route on behalf of an operator',
+          );
+        }
+        const operator = await prisma.operatorProfile.findUnique({
+          where: { id: data.operatorId },
+        });
+        if (!operator) throw AppError.notFound('Operator not found');
+        operatorId = data.operatorId;
+      }
+
+      const route = await busService.createRoute(operatorId, data);
       await writeAuditLog({
         actorId: actor.id,
         action: 'route.create',
         entity: 'route',
         entityId: route.id,
-        details: { fromCity: data.fromCity, toCity: data.toCity, basePrice: data.basePrice },
+        details: {
+          operatorId,
+          fromCity: data.fromCity,
+          toCity: data.toCity,
+          basePrice: data.basePrice,
+        },
         ipAddress: request.ip,
       });
       return reply.code(201).send(route);
@@ -485,13 +532,22 @@ export async function registerBusRoutes(app: FastifyInstance): Promise<void> {
     async (request: FastifyRequest, reply) => {
       const actor = requireUser(request);
       const parsed = updateRouteSchema.parse(request);
-      const route = await busService.updateRoute(parsed.params.id, parsed.body);
+
+      if ((actor.role === 'ADMIN' || actor.role === 'SUPER_ADMIN') && !parsed.body.reason) {
+        throw AppError.validation('A reason is required when an admin edits a route');
+      }
+
+      const operatorId = actor.role === 'OPERATOR' ? await requireOperatorId(actor.id) : undefined;
+      const route = await busService.updateRoute(parsed.params.id, parsed.body, {
+        role: actor.role,
+        operatorId,
+      });
       await writeAuditLog({
         actorId: actor.id,
         action: 'route.update',
         entity: 'route',
         entityId: parsed.params.id,
-        details: parsed.body,
+        details: { ...parsed.body, reason: parsed.body.reason ?? undefined },
         ipAddress: request.ip,
       });
       return reply.send(route);
@@ -501,10 +557,10 @@ export async function registerBusRoutes(app: FastifyInstance): Promise<void> {
   app.delete(
     '/bus-routes/:id',
     {
-      preHandler: [authenticate, authorize('SUPER_ADMIN')],
+      preHandler: [authenticate, authorize('SUPER_ADMIN', 'OPERATOR')],
       schema: {
         tags: ['bus'],
-        summary: 'Delete a route (super admin only)',
+        summary: 'Delete a route (operator soft-deletes own, super admin hard-deletes)',
         security: [{ bearerAuth: [] }],
         params: { type: 'object', properties: { id: { type: 'string' } } },
         response: { 204: { type: 'null' } },
@@ -513,7 +569,14 @@ export async function registerBusRoutes(app: FastifyInstance): Promise<void> {
     async (request: FastifyRequest, reply) => {
       const actor = requireUser(request);
       const { id } = routeParamsSchema.parse(request).params;
-      await busService.deleteRoute(id);
+
+      if (actor.role === 'OPERATOR') {
+        const operatorId = await requireOperatorId(actor.id);
+        await busService.deleteRoute(id, { role: 'OPERATOR', operatorId });
+      } else {
+        await busService.deleteRoute(id, { role: 'SUPER_ADMIN' });
+      }
+
       await writeAuditLog({
         actorId: actor.id,
         action: 'route.delete',
@@ -559,7 +622,11 @@ export async function registerBusRoutes(app: FastifyInstance): Promise<void> {
     async (request: FastifyRequest, reply) => {
       const actor = requireUser(request);
       const parsed = routeStopsSchema.parse(request);
-      const result = await busService.setRouteStops(parsed.params.id, parsed.body.stops);
+      const operatorId = actor.role === 'OPERATOR' ? await requireOperatorId(actor.id) : undefined;
+      const result = await busService.setRouteStops(parsed.params.id, parsed.body.stops, {
+        role: actor.role,
+        operatorId,
+      });
       await writeAuditLog({
         actorId: actor.id,
         action: 'route.stops.update',

@@ -146,11 +146,26 @@ export class BusService {
 
   // ---- Routes ----
 
-  async listRoutes(): Promise<{ items: unknown[] }> {
+  async listRoutes(
+    opts: {
+      operatorId?: string;
+      includeOperator?: boolean;
+      includeInactive?: boolean;
+    } = {},
+  ): Promise<{ items: unknown[] }> {
+    const where: Prisma.RouteWhereInput = {};
+    if (!opts.includeInactive) where.isActive = true;
+    if (opts.operatorId) where.operatorId = opts.operatorId;
+
     const items = await prisma.route.findMany({
-      where: { isActive: true },
-      include: { stops: { orderBy: { order: 'asc' } } },
-      orderBy: { fromCity: 'asc' },
+      where,
+      include: opts.includeOperator
+        ? {
+            stops: { orderBy: { order: 'asc' } },
+            operator: { select: { id: true, businessName: true } },
+          }
+        : { stops: { orderBy: { order: 'asc' } } },
+      orderBy: [{ fromCity: 'asc' }, { toCity: 'asc' }],
     });
     return { items };
   }
@@ -165,9 +180,13 @@ export class BusService {
   async setRouteStops(
     routeId: string,
     stops: Array<{ city: string; departureOffsetMinutes: number; segmentPrice: number }>,
+    actor: { role: Role; operatorId?: string },
   ): Promise<{ id: string }> {
     const route = await prisma.route.findUnique({ where: { id: routeId } });
     if (!route) throw AppError.notFound('Route not found');
+    if (actor.role === 'OPERATOR' && route.operatorId !== actor.operatorId) {
+      throw AppError.forbidden('You can only manage your own routes');
+    }
     if (stops.length < 2) {
       throw AppError.validation('At least an origin and a destination stop are required');
     }
@@ -208,34 +227,56 @@ export class BusService {
     return { id: routeId };
   }
 
-  async createRoute(data: CreateRouteInput): Promise<{ id: string }> {
+  async createRoute(operatorId: string, data: CreateRouteInput): Promise<{ id: string }> {
+    const { operatorId: _ignored, ...rest } = data;
     try {
-      const route = await prisma.route.create({ data });
+      const route = await prisma.route.create({ data: { ...rest, operatorId } });
       return { id: route.id };
     } catch (err) {
       if (this.isUniqueViolation(err)) {
-        throw AppError.conflict('A route between these cities already exists');
+        throw AppError.conflict('This operator already has a route between these cities');
       }
       throw err;
     }
   }
 
-  async updateRoute(id: string, data: UpdateRouteInput): Promise<{ id: string }> {
+  async updateRoute(
+    id: string,
+    data: UpdateRouteInput,
+    actor: { role: Role; operatorId?: string },
+  ): Promise<{ id: string }> {
     const existing = await prisma.route.findUnique({ where: { id } });
     if (!existing) throw AppError.notFound('Route not found');
 
+    if (actor.role === 'OPERATOR') {
+      if (existing.operatorId !== actor.operatorId) {
+        throw AppError.forbidden('You can only update your own routes');
+      }
+    }
+
+    const payload: Prisma.RouteUpdateInput = {};
+    if (data.fromCity !== undefined) payload.fromCity = data.fromCity;
+    if (data.toCity !== undefined) payload.toCity = data.toCity;
+    if (data.basePrice !== undefined) payload.basePrice = data.basePrice;
+    if (data.distanceKm !== undefined) payload.distanceKm = data.distanceKm;
+    if (data.isActive !== undefined) payload.isActive = data.isActive;
+    // Only admins may reassign ownership of a route.
+    if (data.operatorId !== undefined && actor.role !== 'OPERATOR') {
+      payload.operator = { connect: { id: data.operatorId } };
+    }
+
     try {
-      await prisma.route.update({ where: { id }, data });
+      await prisma.route.update({ where: { id }, data: payload });
     } catch (err) {
       if (this.isUniqueViolation(err)) {
-        throw AppError.conflict('A route between these cities already exists');
+        throw AppError.conflict('This operator already has a route between these cities');
       }
       throw err;
     }
     return { id };
   }
 
-  async deleteRoute(id: string): Promise<void> {
+  async deleteRoute(id: string, actor: { role: Role; operatorId?: string }): Promise<void> {
     const existing = await prisma.route.findUnique({ where: { id } });
     if (!existing) throw AppError.notFound('Route not found');
 
@@ -244,6 +285,16 @@ export class BusService {
       throw AppError.conflict('Cannot delete a route that has trips scheduled');
     }
 
+    if (actor.role === 'OPERATOR') {
+      if (existing.operatorId !== actor.operatorId) {
+        throw AppError.forbidden('You can only delete your own routes');
+      }
+      // Operators soft-delete (deactivate) their own routes so historical trips remain valid.
+      await prisma.route.update({ where: { id }, data: { isActive: false } });
+      return;
+    }
+
+    // ADMIN / SUPER_ADMIN perform a hard delete.
     await prisma.route.delete({ where: { id } });
   }
 
@@ -333,6 +384,9 @@ export class BusService {
 
     const bus = await prisma.bus.findUnique({ where: { id: data.busId } });
     if (!bus) throw AppError.notFound('Bus not found');
+    if (route.operatorId !== operatorId) {
+      throw AppError.forbidden('You can only schedule trips on your own routes');
+    }
     if (bus.operatorId !== operatorId) {
       throw AppError.forbidden('You can only schedule trips with your own buses');
     }

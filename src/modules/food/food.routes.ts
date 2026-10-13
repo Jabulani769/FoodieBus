@@ -4,14 +4,25 @@ import {
   categoryParamsSchema,
   createCategorySchema,
   createDishSchema,
+  createOptionGroupSchema,
+  createOptionSchema,
+  findOrCreateCategorySchema,
   getDishParamsSchema,
   getVendorParamsSchema,
+  listCategoriesSchema,
   listDishesSchema,
   listVendorsSchema,
+  optionGroupParamsSchema,
+  optionParamsSchema,
+  pauseVendorSchema,
+  reorderCategoriesSchema,
   updateAvailabilitySchema,
   updateCategorySchema,
   updateDishSchema,
+  updateOptionGroupSchema,
+  updateOptionSchema,
   updateVendorProfileSchema,
+  upsertHoursSchema,
 } from './food.schema.js';
 import { authenticate, authenticateOptional, authorize } from '../../shared/middleware/index.js';
 import { AppError } from '../../shared/errors/AppError.js';
@@ -44,7 +55,14 @@ export async function registerFoodRoutes(app: FastifyInstance): Promise<void> {
     {
       schema: {
         tags: ['food'],
-        summary: 'List active food categories',
+        summary: 'List food categories (searchable, active filter)',
+        querystring: {
+          type: 'object',
+          properties: {
+            search: { type: 'string' },
+            includeInactive: { type: 'string', enum: ['true', 'false'] },
+          },
+        },
         response: {
           200: {
             type: 'object',
@@ -66,9 +84,15 @@ export async function registerFoodRoutes(app: FastifyInstance): Promise<void> {
           },
         },
       },
+      preHandler: [authenticateOptional],
     },
-    async (_request, reply) => {
-      const result = await foodService.listCategories();
+    async (request, reply) => {
+      const parsed = listCategoriesSchema.parse({ querystring: request.query ?? {} }).querystring;
+      const result = await foodService.listCategories({
+        search: parsed.search,
+        includeInactive:
+          parsed.includeInactive === 'true' ? true : canViewInactive(request as FastifyRequest),
+      });
       return reply.send(result);
     },
   );
@@ -88,7 +112,7 @@ export async function registerFoodRoutes(app: FastifyInstance): Promise<void> {
             slug: { type: 'string' },
             sortOrder: { type: 'integer', default: 0 },
           },
-          required: ['name', 'slug'],
+          required: ['name'],
         },
         response: { 201: { type: 'object', properties: { id: { type: 'string' } } } },
       },
@@ -106,6 +130,72 @@ export async function registerFoodRoutes(app: FastifyInstance): Promise<void> {
         ipAddress: request.ip,
       });
       return reply.code(201).send(category);
+    },
+  );
+
+  app.post(
+    '/categories/find-or-create',
+    {
+      preHandler: [authenticate, authorize('VENDOR', 'ADMIN', 'SUPER_ADMIN')],
+      schema: {
+        tags: ['food'],
+        summary: 'Find or create a category by name (vendor custom creation)',
+        security: [{ bearerAuth: [] }],
+        body: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
+      },
+    },
+    async (request: FastifyRequest, reply) => {
+      const actor = requireUser(request);
+      const { name } = findOrCreateCategorySchema.parse({ body: request.body }).body;
+      const result = await foodService.findOrCreateCategory(name);
+      await writeAuditLog({
+        actorId: actor.id,
+        action: 'category.find_or_create',
+        entity: 'food_category',
+        entityId: result.id,
+        details: { name, created: result.created },
+        ipAddress: request.ip,
+      });
+      return reply.code(result.created ? 201 : 200).send(result);
+    },
+  );
+
+  app.patch(
+    '/categories/reorder',
+    {
+      preHandler: [authenticate, authorize('SUPER_ADMIN', 'ADMIN')],
+      schema: {
+        tags: ['food'],
+        summary: 'Bulk reorder categories (drag-and-drop)',
+        security: [{ bearerAuth: [] }],
+        body: {
+          type: 'object',
+          properties: {
+            items: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: { id: { type: 'string' }, sortOrder: { type: 'integer' } },
+                required: ['id', 'sortOrder'],
+              },
+            },
+          },
+          required: ['items'],
+        },
+      },
+    },
+    async (request: FastifyRequest, reply) => {
+      const actor = requireUser(request);
+      const { items } = reorderCategoriesSchema.parse({ body: request.body }).body;
+      const result = await foodService.reorderCategories(items);
+      await writeAuditLog({
+        actorId: actor.id,
+        action: 'category.reorder',
+        entity: 'food_category',
+        details: { count: items.length },
+        ipAddress: request.ip,
+      });
+      return reply.send(result);
     },
   );
 
@@ -180,44 +270,18 @@ export async function registerFoodRoutes(app: FastifyInstance): Promise<void> {
     {
       schema: {
         tags: ['food'],
-        summary: 'List vendors',
+        summary: 'List vendors (category + geo + open filters)',
         querystring: {
           type: 'object',
           properties: {
             page: { type: 'integer', minimum: 1, default: 1 },
             limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
-          },
-        },
-        response: {
-          200: {
-            type: 'object',
-            properties: {
-              items: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    id: { type: 'string' },
-                    businessName: { type: 'string' },
-                    description: { type: 'string' },
-                    phone: { type: 'string' },
-                    logoUrl: { type: 'string' },
-                    isActive: { type: 'boolean' },
-                    createdAt: { type: 'string', format: 'date-time' },
-                    user: {
-                      type: 'object',
-                      properties: {
-                        fullName: { type: 'string' },
-                        email: { type: 'string' },
-                      },
-                    },
-                  },
-                },
-              },
-              page: { type: 'integer' },
-              limit: { type: 'integer' },
-              total: { type: 'integer' },
-            },
+            categoryId: { type: 'string' },
+            categorySlug: { type: 'string' },
+            lat: { type: 'number' },
+            lng: { type: 'number' },
+            radiusKm: { type: 'number' },
+            onlyOpen: { type: 'string', enum: ['true', 'false'] },
           },
         },
       },
@@ -227,6 +291,12 @@ export async function registerFoodRoutes(app: FastifyInstance): Promise<void> {
       const q = listVendorsSchema.parse({ querystring: request.query }).querystring;
       const result = await foodService.listVendors(q.page, q.limit, {
         includeInactive: canViewInactive(request),
+        categoryId: q.categoryId,
+        categorySlug: q.categorySlug,
+        lat: q.lat,
+        lng: q.lng,
+        radiusKm: q.radiusKm,
+        onlyOpen: q.onlyOpen === 'true',
       });
       return reply.send(result);
     },
@@ -239,27 +309,6 @@ export async function registerFoodRoutes(app: FastifyInstance): Promise<void> {
         tags: ['food'],
         summary: 'Get a vendor profile by id',
         params: { type: 'object', properties: { id: { type: 'string' } } },
-        response: {
-          200: {
-            type: 'object',
-            properties: {
-              id: { type: 'string' },
-              businessName: { type: 'string' },
-              description: { type: 'string' },
-              phone: { type: 'string' },
-              logoUrl: { type: 'string' },
-              isActive: { type: 'boolean' },
-              createdAt: { type: 'string', format: 'date-time' },
-              user: {
-                type: 'object',
-                properties: {
-                  fullName: { type: 'string' },
-                  email: { type: 'string' },
-                },
-              },
-            },
-          },
-        },
       },
       preHandler: [authenticateOptional],
     },
@@ -280,19 +329,6 @@ export async function registerFoodRoutes(app: FastifyInstance): Promise<void> {
         tags: ['food'],
         summary: 'Get the authenticated vendor profile',
         security: [{ bearerAuth: [] }],
-        response: {
-          200: {
-            type: 'object',
-            properties: {
-              id: { type: 'string' },
-              businessName: { type: 'string' },
-              description: { type: 'string' },
-              phone: { type: 'string' },
-              logoUrl: { type: 'string' },
-              isActive: { type: 'boolean' },
-            },
-          },
-        },
       },
     },
     async (request: FastifyRequest, reply) => {
@@ -308,7 +344,7 @@ export async function registerFoodRoutes(app: FastifyInstance): Promise<void> {
       preHandler: [authenticate, authorize('VENDOR')],
       schema: {
         tags: ['food'],
-        summary: 'Update the authenticated vendor profile',
+        summary: 'Update the authenticated vendor profile (pin + radius)',
         security: [{ bearerAuth: [] }],
         body: {
           type: 'object',
@@ -317,6 +353,14 @@ export async function registerFoodRoutes(app: FastifyInstance): Promise<void> {
             description: { type: 'string' },
             phone: { type: 'string' },
             logoUrl: { type: 'string' },
+            bannerUrl: { type: 'string' },
+            cuisineType: { type: 'string' },
+            deliveryTime: { type: 'integer' },
+            deliveryRadiusKm: { type: 'number' },
+            address: { type: 'string' },
+            city: { type: 'string' },
+            latitude: { type: 'number', minimum: -90, maximum: 90 },
+            longitude: { type: 'number', minimum: -180, maximum: 180 },
           },
         },
         response: { 200: { type: 'object', properties: { id: { type: 'string' } } } },
@@ -338,6 +382,114 @@ export async function registerFoodRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
+  app.patch(
+    '/vendors/me/pause',
+    {
+      preHandler: [authenticate, authorize('VENDOR')],
+      schema: {
+        tags: ['food'],
+        summary: 'Emergency pause switch (Busy - Not Accepting Orders)',
+        security: [{ bearerAuth: [] }],
+        body: {
+          type: 'object',
+          properties: { isPaused: { type: 'boolean' } },
+          required: ['isPaused'],
+        },
+      },
+    },
+    async (request: FastifyRequest, reply) => {
+      const actor = requireUser(request);
+      const { isPaused } = pauseVendorSchema.parse({ body: request.body }).body;
+      const result = await foodService.setVendorPaused(actor.id, isPaused);
+      await writeAuditLog({
+        actorId: actor.id,
+        action: 'vendor.pause',
+        entity: 'vendor_profile',
+        entityId: result.id,
+        details: { isPaused },
+        ipAddress: request.ip,
+      });
+      return reply.send(result);
+    },
+  );
+
+  app.put(
+    '/vendors/me/hours',
+    {
+      preHandler: [authenticate, authorize('VENDOR')],
+      schema: {
+        tags: ['food'],
+        summary: 'Upsert weekly operating schedule',
+        security: [{ bearerAuth: [] }],
+        body: {
+          type: 'object',
+          properties: {
+            hours: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  dayOfWeek: { type: 'integer', minimum: 0, maximum: 6 },
+                  openTime: { type: 'string' },
+                  closeTime: { type: 'string' },
+                  isClosed: { type: 'boolean' },
+                },
+                required: ['dayOfWeek', 'openTime', 'closeTime'],
+              },
+            },
+          },
+          required: ['hours'],
+        },
+      },
+    },
+    async (request: FastifyRequest, reply) => {
+      const actor = requireUser(request);
+      const { hours } = upsertHoursSchema.parse({ body: request.body }).body;
+      const result = await foodService.upsertHours(actor.id, hours);
+      await writeAuditLog({
+        actorId: actor.id,
+        action: 'vendor.hours',
+        entity: 'vendor_profile',
+        entityId: result.id,
+        details: { count: hours.length },
+        ipAddress: request.ip,
+      });
+      return reply.send(result);
+    },
+  );
+
+  app.get(
+    '/vendors/me/hours',
+    {
+      preHandler: [authenticate, authorize('VENDOR')],
+      schema: {
+        tags: ['food'],
+        summary: 'Get own operating hours',
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (request: FastifyRequest, reply) => {
+      const user = requireUser(request);
+      const vendorId = await requireVendorId(user.id);
+      return reply.send({ items: await foodService.getHours(vendorId) });
+    },
+  );
+
+  app.get(
+    '/vendors/:id/hours',
+    {
+      schema: {
+        tags: ['food'],
+        summary: 'Get vendor operating hours',
+        params: { type: 'object', properties: { id: { type: 'string' } } },
+      },
+    },
+    async (request, reply) => {
+      const { id } = getVendorParamsSchema.parse(request).params;
+      return reply.send({ items: await foodService.getHours(id) });
+    },
+  );
+
   // ---- Dishes ----
 
   app.get(
@@ -354,38 +506,6 @@ export async function registerFoodRoutes(app: FastifyInstance): Promise<void> {
             limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
             categoryId: { type: 'string' },
             isAvailable: { type: 'string', enum: ['true', 'false'] },
-          },
-        },
-        response: {
-          200: {
-            type: 'object',
-            properties: {
-              items: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    id: { type: 'string' },
-                    name: { type: 'string' },
-                    description: { type: 'string' },
-                    price: { type: 'string' },
-                    imageUrl: { type: 'string' },
-                    isAvailable: { type: 'boolean' },
-                    category: {
-                      type: 'object',
-                      properties: {
-                        id: { type: 'string' },
-                        name: { type: 'string' },
-                        slug: { type: 'string' },
-                      },
-                    },
-                  },
-                },
-              },
-              page: { type: 'integer' },
-              limit: { type: 'integer' },
-              total: { type: 'integer' },
-            },
           },
         },
       },
@@ -405,44 +525,27 @@ export async function registerFoodRoutes(app: FastifyInstance): Promise<void> {
   );
 
   app.get(
+    '/vendors/:vendorId/menu-grouped',
+    {
+      schema: {
+        tags: ['food'],
+        summary: 'In-store grouped menu view (category headers in sort order)',
+        params: { type: 'object', properties: { vendorId: { type: 'string' } } },
+      },
+    },
+    async (request, reply) => {
+      const params = request.params as { vendorId: string };
+      return reply.send(await foodService.getVendorMenuGrouped(params.vendorId));
+    },
+  );
+
+  app.get(
     '/dishes/:id',
     {
       schema: {
         tags: ['food'],
-        summary: 'Get a dish by id',
+        summary: 'Get a dish by id (with customizations + badge)',
         params: { type: 'object', properties: { id: { type: 'string' } } },
-        response: {
-          200: {
-            type: 'object',
-            properties: {
-              id: { type: 'string' },
-              name: { type: 'string' },
-              description: { type: 'string' },
-              price: { type: 'string' },
-              imageUrl: { type: 'string' },
-              isAvailable: { type: 'boolean' },
-              vendor: {
-                type: 'object',
-                properties: {
-                  id: { type: 'string' },
-                  businessName: { type: 'string' },
-                },
-              },
-              category: {
-                type: 'object',
-                properties: {
-                  id: { type: 'string' },
-                  name: { type: 'string' },
-                  slug: { type: 'string' },
-                },
-              },
-              rating: {
-                type: 'object',
-                properties: { average: { type: 'number' }, count: { type: 'integer' } },
-              },
-            },
-          },
-        },
       },
     },
     async (request, reply) => {
@@ -606,6 +709,147 @@ export async function registerFoodRoutes(app: FastifyInstance): Promise<void> {
         ipAddress: request.ip,
       });
       return reply.send(dish);
+    },
+  );
+
+  // ---- Dish customizations (option groups / options) ----
+
+  app.post(
+    '/dishes/:id/option-groups',
+    {
+      preHandler: [authenticate, authorize('VENDOR')],
+      schema: {
+        tags: ['food'],
+        summary: 'Create required/optional customization group (radio/checkbox)',
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (request: FastifyRequest, reply) => {
+      const actor = requireUser(request);
+      const vendorId = await requireVendorId(actor.id);
+      const parsed = createOptionGroupSchema.parse(request);
+      // Fastify merges :id into params; zod expects {id}
+      const dishId = (request.params as { id: string }).id;
+      const group = await foodService.createOptionGroup(dishId, vendorId, parsed.body);
+      await writeAuditLog({
+        actorId: actor.id,
+        action: 'dish.option_group.create',
+        entity: 'dish_option_group',
+        entityId: group.id,
+        details: { dishId, ...parsed.body },
+        ipAddress: request.ip,
+      });
+      return reply.code(201).send(group);
+    },
+  );
+
+  app.patch(
+    '/dishes/:dishId/option-groups/:groupId',
+    {
+      preHandler: [authenticate, authorize('VENDOR')],
+      schema: { tags: ['food'], summary: 'Update option group', security: [{ bearerAuth: [] }] },
+    },
+    async (request: FastifyRequest, reply) => {
+      const actor = requireUser(request);
+      const vendorId = await requireVendorId(actor.id);
+      const parsed = updateOptionGroupSchema.parse(request);
+      return reply.send(
+        await foodService.updateOptionGroup(
+          parsed.params.dishId,
+          parsed.params.groupId,
+          vendorId,
+          parsed.body,
+        ),
+      );
+    },
+  );
+
+  app.delete(
+    '/dishes/:dishId/option-groups/:groupId',
+    {
+      preHandler: [authenticate, authorize('VENDOR')],
+      schema: { tags: ['food'], summary: 'Delete option group', security: [{ bearerAuth: [] }] },
+    },
+    async (request: FastifyRequest, reply) => {
+      const actor = requireUser(request);
+      const vendorId = await requireVendorId(actor.id);
+      const parsed = optionGroupParamsSchema.parse(request);
+      await foodService.deleteOptionGroup(parsed.params.dishId, parsed.params.groupId, vendorId);
+      return reply.code(204).send();
+    },
+  );
+
+  app.post(
+    '/dishes/:dishId/option-groups/:groupId/options',
+    {
+      preHandler: [authenticate, authorize('VENDOR')],
+      schema: {
+        tags: ['food'],
+        summary: 'Add option (label + priceDelta)',
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (request: FastifyRequest, reply) => {
+      const actor = requireUser(request);
+      const vendorId = await requireVendorId(actor.id);
+      const parsed = createOptionSchema.parse(request);
+      const option = await foodService.createOption(
+        parsed.params.dishId,
+        parsed.params.groupId,
+        vendorId,
+        parsed.body,
+      );
+      await writeAuditLog({
+        actorId: actor.id,
+        action: 'dish.option.create',
+        entity: 'dish_option',
+        entityId: option.id,
+        details: { dishId: parsed.params.dishId, ...parsed.body },
+        ipAddress: request.ip,
+      });
+      return reply.code(201).send(option);
+    },
+  );
+
+  app.patch(
+    '/dishes/:dishId/option-groups/:groupId/options/:optionId',
+    {
+      preHandler: [authenticate, authorize('VENDOR')],
+      schema: { tags: ['food'], summary: 'Update option', security: [{ bearerAuth: [] }] },
+    },
+    async (request: FastifyRequest, reply) => {
+      const actor = requireUser(request);
+      const vendorId = await requireVendorId(actor.id);
+      const parsed = updateOptionSchema.parse(request);
+      return reply.send(
+        await foodService.updateOption(
+          parsed.params.dishId,
+          parsed.params.groupId,
+          parsed.params.optionId,
+          vendorId,
+          parsed.body,
+        ),
+      );
+    },
+  );
+
+  app.delete(
+    '/dishes/:dishId/option-groups/:groupId/options/:optionId',
+    {
+      preHandler: [authenticate, authorize('VENDOR')],
+      schema: { tags: ['food'], summary: 'Delete option', security: [{ bearerAuth: [] }] },
+    },
+    async (request: FastifyRequest, reply) => {
+      const actor = requireUser(request);
+      const vendorId = await requireVendorId(actor.id);
+      const parsed = optionParamsSchema.parse(request);
+      await foodService.deleteOption(
+        parsed.params.dishId,
+        parsed.params.groupId,
+        parsed.params.optionId,
+        vendorId,
+      );
+      return reply.code(204).send();
     },
   );
 }

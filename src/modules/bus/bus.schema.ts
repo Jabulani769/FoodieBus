@@ -73,6 +73,7 @@ export const createRouteSchema = z.object({
     toCity: z.string().min(1, 'toCity is required'),
     basePrice: z.number().positive('basePrice must be positive'),
     distanceKm: z.number().int().min(1).optional(),
+    operatorId: z.string().uuid('Invalid operator id').optional(),
   }),
 });
 
@@ -85,6 +86,8 @@ export const updateRouteSchema = z.object({
       basePrice: z.number().positive().optional(),
       distanceKm: z.number().int().min(1).optional(),
       isActive: z.boolean().optional(),
+      operatorId: z.string().uuid('Invalid operator id').optional(),
+      reason: z.string().min(1, 'A reason is required when an admin edits a route').optional(),
     })
     .refine((b) => Object.keys(b).length > 0, {
       message: 'At least one field must be provided',
