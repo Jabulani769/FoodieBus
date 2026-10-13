@@ -6,11 +6,13 @@ export const NOTIFICATIONS_QUEUE = 'notifications';
 export const BOOKING_EXPIRY_QUEUE = 'booking-expiry';
 export const PAYMENT_EXPIRY_QUEUE = 'payment-expiry';
 export const RECONCILIATION_QUEUE = 'reconciliation';
+export const PROMOTION_EXPIRY_QUEUE = 'promotion-expiry';
 
 export const SEND_NOTIFICATION_JOB = 'send-notification';
 export const BOOKING_EXPIRY_JOB = 'run-booking-expiry';
 export const PAYMENT_EXPIRY_JOB = 'run-payment-expiry';
 export const RECONCILIATION_JOB = 'run-reconciliation';
+export const PROMOTION_EXPIRY_JOB = 'run-promotion-expiry';
 
 function createQueue(name: string): Queue {
   const queue = new Queue(name, { connection: createRedisConnection() });
@@ -24,3 +26,4 @@ export const notificationsQueue = createQueue(NOTIFICATIONS_QUEUE);
 export const bookingExpiryQueue = createQueue(BOOKING_EXPIRY_QUEUE);
 export const paymentExpiryQueue = createQueue(PAYMENT_EXPIRY_QUEUE);
 export const reconciliationQueue = createQueue(RECONCILIATION_QUEUE);
+export const promotionExpiryQueue = createQueue(PROMOTION_EXPIRY_QUEUE);

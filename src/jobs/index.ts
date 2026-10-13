@@ -11,6 +11,10 @@ import {
   startReconciliationWorker,
   scheduleReconciliation,
 } from './workers/reconciliation.worker.js';
+import {
+  startPromotionExpiryWorker,
+  schedulePromotionExpiry,
+} from './workers/promotion-expiry.worker.js';
 import { logger } from '../shared/logger/index.js';
 import { queueJobsGauge } from '../shared/metrics/index.js';
 import {
@@ -18,6 +22,7 @@ import {
   bookingExpiryQueue,
   paymentExpiryQueue,
   reconciliationQueue,
+  promotionExpiryQueue,
 } from './queues.js';
 
 export interface RunningWorkers {
@@ -25,10 +30,17 @@ export interface RunningWorkers {
   bookingExpiry: ReturnType<typeof startBookingExpiryWorker>;
   paymentExpiry: ReturnType<typeof startPaymentExpiryWorker>;
   reconciliation: ReturnType<typeof startReconciliationWorker>;
+  promotionExpiry: ReturnType<typeof startPromotionExpiryWorker>;
   metricsTimer?: NodeJS.Timeout;
 }
 
-const QUEUES = [notificationsQueue, bookingExpiryQueue, paymentExpiryQueue, reconciliationQueue];
+const QUEUES = [
+  notificationsQueue,
+  bookingExpiryQueue,
+  paymentExpiryQueue,
+  reconciliationQueue,
+  promotionExpiryQueue,
+];
 
 async function refreshQueueMetrics(): Promise<void> {
   for (const queue of QUEUES) {
@@ -41,7 +53,7 @@ async function refreshQueueMetrics(): Promise<void> {
         'completed',
       );
       for (const [status, count] of Object.entries(counts)) {
-        queueJobsGauge.set({ queue: queue.name, status }, count ?? 0);
+        queueJobsGauge.set({ queue: queue.name, status }, (count as number) ?? 0);
       }
     } catch (err) {
       logger.warn({ err, queue: queue.name }, 'failed to refresh queue metrics');
@@ -54,15 +66,24 @@ export function startWorkers(): RunningWorkers {
   const bookingExpiry = startBookingExpiryWorker();
   const paymentExpiry = startPaymentExpiryWorker();
   const reconciliation = startReconciliationWorker();
+  const promotionExpiry = startPromotionExpiryWorker();
   scheduleBookingExpiry();
   schedulePaymentExpiry();
   scheduleReconciliation();
+  schedulePromotionExpiry();
   const metricsTimer = setInterval(() => void refreshQueueMetrics(), 30_000);
   metricsTimer.unref();
   logger.info(
-    'bullmq workers started (notifications, booking-expiry, payment-expiry, reconciliation)',
+    'bullmq workers started (notifications, booking-expiry, payment-expiry, reconciliation, promotion-expiry)',
   );
-  return { notification, bookingExpiry, paymentExpiry, reconciliation, metricsTimer };
+  return {
+    notification,
+    bookingExpiry,
+    paymentExpiry,
+    reconciliation,
+    promotionExpiry,
+    metricsTimer,
+  };
 }
 
 export async function stopWorkers(workers: RunningWorkers): Promise<void> {
@@ -72,5 +93,6 @@ export async function stopWorkers(workers: RunningWorkers): Promise<void> {
     workers.bookingExpiry.close(),
     workers.paymentExpiry.close(),
     workers.reconciliation.close(),
+    workers.promotionExpiry.close(),
   ]);
 }

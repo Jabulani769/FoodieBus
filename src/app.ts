@@ -26,6 +26,7 @@ import { registerDeliveryRoutes } from './modules/delivery/delivery.routes.js';
 import { registerUploadRoutes } from './modules/uploads/upload.routes.js';
 import { registerRatingRoutes } from './modules/ratings/rating.routes.js';
 import { registerCouponRoutes } from './modules/coupons/coupon.routes.js';
+import { registerPromotionRoutes } from './modules/promotions/promotion.routes.js';
 import { registerFavoriteRoutes } from './modules/favorites/favorite.routes.js';
 import { registerMetricsRoutes } from './modules/metrics/metrics.routes.js';
 import { registerEasyPayRoutes } from './modules/easypay/easypay.routes.js';
@@ -127,6 +128,7 @@ export async function buildApp(
   await app.register(registerUploadRoutes, { prefix: '/api/v1' });
   await app.register(registerRatingRoutes, { prefix: '/api/v1' });
   await app.register(registerCouponRoutes, { prefix: '/api/v1' });
+  await app.register(registerPromotionRoutes, { prefix: '/api/v1' });
   await app.register(registerFavoriteRoutes, { prefix: '/api/v1' });
   await app.register(registerMetricsRoutes);
 

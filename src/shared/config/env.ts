@@ -69,6 +69,11 @@ const envSchema = z.object({
 
   // ---- Driver payouts ----
   DRIVER_TRIP_FEE: z.coerce.number().nonnegative().default(0),
+
+  // ---- Promotions (dish boost, flat per-day) ----
+  // Overridable at runtime via the PlatformSetting "promotion.daily_rate_mwk".
+  PROMOTION_DAILY_RATE_MWK: z.coerce.number().positive().default(2000),
+  PROMOTION_MAX_DAYS: z.coerce.number().int().min(1).max(90).default(30),
 });
 
 const parsed = envSchema.safeParse(process.env);
